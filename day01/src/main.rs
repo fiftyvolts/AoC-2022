@@ -31,5 +31,6 @@ fn part12(input: &String) {
         .collect::<Vec<u32>>();
 
     sums.sort();
+    
     println!("{}", sums.iter().rev().take(3).sum::<u32>());
 }
