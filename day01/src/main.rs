@@ -7,14 +7,29 @@ fn input_txt() -> String {
 
 fn main() {
     let input = input_txt();
-    part1(&input);
-    part2(&input);
+    part12(&input);
 }
 
-fn part1(input: &String) {
-    todo!();
-}
+fn part12(input: &String) {
+    let mut elves: Vec<Vec<u32>> = vec![];
+    let mut cur: Vec<u32> = vec![];
+    for line in input.lines() {
+        match u32::from_str_radix(line, 10) {
+            Ok(x) => cur.push(x),
+            _ => {
+                elves.push(cur);
+                cur = vec![];
+            }
+        }
+    }
+    let max = elves.iter().map(|elf| elf.iter().sum::<u32>()).max();
+    println!("{}", max.unwrap());
 
-fn part2(input: &String) {
-    todo!();
+    let mut sums = elves
+        .iter()
+        .map(|elf| elf.iter().sum::<u32>())
+        .collect::<Vec<u32>>();
+
+    sums.sort();
+    println!("{}", sums.iter().rev().take(3).sum::<u32>());
 }
