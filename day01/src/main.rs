@@ -11,26 +11,20 @@ fn main() {
 }
 
 fn part12(input: &String) {
-    let mut elves: Vec<Vec<u32>> = vec![];
-    let mut cur: Vec<u32> = vec![];
+    let mut elves: Vec<u32> = vec![];
+    let mut sum = 0;
     for line in input.lines() {
-        match u32::from_str_radix(line, 10) {
-            Ok(x) => cur.push(x),
-            _ => {
-                elves.push(cur);
-                cur = vec![];
-            }
+        if let Ok(x) = u32::from_str_radix(line, 10) {
+            sum += x;
+        } else {
+            elves.push(sum);
+            sum = 0;
         }
     }
-    let max = elves.iter().map(|elf| elf.iter().sum::<u32>()).max();
-    println!("{}", max.unwrap());
-
-    let mut sums = elves
-        .iter()
-        .map(|elf| elf.iter().sum::<u32>())
-        .collect::<Vec<u32>>();
-
-    sums.sort();
-    
-    println!("{}", sums.iter().rev().take(3).sum::<u32>());
+    elves.sort_by(|a, b| b.cmp(a));
+    println!(
+        "{}, {}",
+        elves.first().unwrap(),
+        elves.iter().take(3).sum::<u32>()
+    );
 }
