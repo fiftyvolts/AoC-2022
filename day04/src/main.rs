@@ -12,9 +12,33 @@ fn main() {
 }
 
 fn part1(input: &String) {
-    todo!();
+    let mut count = 0;
+    for line in input.lines() {
+        let pair : Vec<Vec<u32>> = line.split(",").map(|p| p.split("-").map(|i| u32::from_str_radix(i, 10).unwrap()).collect::<Vec<u32>>()).collect();
+        if (pair[0][0] <= pair[1][0] && pair[0][1] >= pair[1][1]) ||
+        (pair[1][0] <= pair[0][0] && pair[1][1] >= pair[0][1]) {
+            count += 1;
+        }
+    }
+    println!("{}", count);
 }
 
 fn part2(input: &String) {
-    todo!();
+    let mut count = 0;
+    for line in input.lines() {
+        let pair : Vec<Vec<u32>> = line.split(",").map(|p| p.split("-").map(|i| u32::from_str_radix(i, 10).unwrap()).collect::<Vec<u32>>()).collect();
+        if (pair[0][0] <= pair[1][0] && pair[0][1] >= pair[1][1]) ||
+        (pair[1][0] <= pair[0][0] && pair[1][1] >= pair[0][1]) ||
+
+        (pair[0][0] <= pair[1][0] && pair[0][1] >= pair[1][0]) ||
+        (pair[1][0] <= pair[0][0] && pair[1][1] >= pair[0][0]) ||
+
+        (pair[0][0] <= pair[1][1] && pair[0][1] >= pair[1][1]) ||
+        (pair[1][0] <= pair[0][1] && pair[1][1] >= pair[0][1])
+        {
+            count += 1;
+        }
+    }
+
+    println!("{}", count);
 }
