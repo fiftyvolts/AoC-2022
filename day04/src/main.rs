@@ -11,12 +11,18 @@ fn main() {
     part2(&input);
 }
 
+fn parse(i: &str) -> u32 {
+    u32::from_str_radix(i, 10).unwrap()
+}
+
 fn part1(input: &String) {
     let mut count = 0;
     for line in input.lines() {
-        let pair : Vec<Vec<u32>> = line.split(",").map(|p| p.split("-").map(|i| u32::from_str_radix(i, 10).unwrap()).collect::<Vec<u32>>()).collect();
-        if (pair[0][0] <= pair[1][0] && pair[0][1] >= pair[1][1]) ||
-        (pair[1][0] <= pair[0][0] && pair[1][1] >= pair[0][1]) {
+        let points: Vec<u32> = line.split(&[',', '-']).map(parse).collect();
+        let (r1, r2) = (points[0]..=points[1], points[2]..=points[3]);
+        if (r1.contains(r2.start()) && r1.contains(r2.end()))
+            || (r2.contains(r1.start()) && r2.contains(r1.end()))
+        {
             count += 1;
         }
     }
@@ -26,15 +32,12 @@ fn part1(input: &String) {
 fn part2(input: &String) {
     let mut count = 0;
     for line in input.lines() {
-        let pair : Vec<Vec<u32>> = line.split(",").map(|p| p.split("-").map(|i| u32::from_str_radix(i, 10).unwrap()).collect::<Vec<u32>>()).collect();
-        if (pair[0][0] <= pair[1][0] && pair[0][1] >= pair[1][1]) ||
-        (pair[1][0] <= pair[0][0] && pair[1][1] >= pair[0][1]) ||
-
-        (pair[0][0] <= pair[1][0] && pair[0][1] >= pair[1][0]) ||
-        (pair[1][0] <= pair[0][0] && pair[1][1] >= pair[0][0]) ||
-
-        (pair[0][0] <= pair[1][1] && pair[0][1] >= pair[1][1]) ||
-        (pair[1][0] <= pair[0][1] && pair[1][1] >= pair[0][1])
+        let points: Vec<u32> = line.split(&[',', '-']).map(parse).collect();
+        let (r1, r2) = (points[0]..=points[1], points[2]..=points[3]);
+        if r1.contains(r2.start())
+            || r1.contains(r2.end())
+            || r2.contains(r1.start())
+            || r2.contains(r1.end())
         {
             count += 1;
         }
