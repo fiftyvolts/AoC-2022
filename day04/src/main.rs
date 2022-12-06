@@ -1,4 +1,4 @@
-use std::{env, fs};
+use std::{env, fs, ops::RangeInclusive};
 
 fn input_txt() -> String {
     let path = env::args().nth(1).unwrap_or(String::from("ex1.txt"));
@@ -7,41 +7,31 @@ fn input_txt() -> String {
 
 fn main() {
     let input = input_txt();
-    part1(&input);
-    part2(&input);
+    println!("{}", part12(&input, fully_contains));
+    println!("{}", part12(&input, overlaps));
 }
 
 fn parse(i: &str) -> u32 {
     u32::from_str_radix(i, 10).unwrap()
 }
 
-fn part1(input: &String) {
-    let mut count = 0;
-    for line in input.lines() {
-        let points: Vec<u32> = line.split(&[',', '-']).map(parse).collect();
-        let (r1, r2) = (points[0]..=points[1], points[2]..=points[3]);
-        if (r1.contains(r2.start()) && r1.contains(r2.end()))
-            || (r2.contains(r1.start()) && r2.contains(r1.end()))
-        {
-            count += 1;
-        }
-    }
-    println!("{}", count);
+fn fully_contains(r: &(RangeInclusive<u32>, RangeInclusive<u32>)) -> bool {
+    (r.0.contains(r.1.start()) && r.0.contains(r.1.end()))
+    || (r.1.contains(r.0.start()) && r.1.contains(r.0.end()))
 }
 
-fn part2(input: &String) {
-    let mut count = 0;
-    for line in input.lines() {
-        let points: Vec<u32> = line.split(&[',', '-']).map(parse).collect();
-        let (r1, r2) = (points[0]..=points[1], points[2]..=points[3]);
-        if r1.contains(r2.start())
-            || r1.contains(r2.end())
-            || r2.contains(r1.start())
-            || r2.contains(r1.end())
-        {
-            count += 1;
-        }
-    }
+fn overlaps(r: &(RangeInclusive<u32>, RangeInclusive<u32>)) -> bool {
+    r.0.contains(r.1.start())
+    || r.0.contains(r.1.end())
+    || r.1.contains(r.0.start())
+    || r.1.contains(r.0.end())
+}
 
-    println!("{}", count);
+fn part12(input: &String, check: fn(&(RangeInclusive<u32>, RangeInclusive<u32>)) -> bool) -> usize {
+    input
+        .lines()
+        .map(|l| l.split(&[',', '-']).map(parse).collect::<Vec<u32>>())
+        .map(|p| (p[0]..=p[1], p[2]..=p[3]))
+        .filter(check)
+        .count()
 }
