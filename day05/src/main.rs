@@ -11,21 +11,26 @@ fn main() {
     part2(&input);
 }
 
-fn part1(input: &String) {
-    let lines: Vec<&str> = input.lines().collect();
+fn parse_stacks(input: &String) -> (usize, Vec<VecDeque<char>>) {
     let mut stacks: Vec<VecDeque<char>> =
         Vec::from_iter(std::iter::repeat(VecDeque::new()).take(9).clone());
     let mut skip = 0;
-    for line in lines.iter().take_while(|l| !l.starts_with(" 1")) {
+    for line in input.lines().take_while(|l| !l.starts_with(" 1")) {
         line.as_bytes()
             .chunks(4)
+            .map(|ch| ch[1] as char)
             .enumerate()
-            .filter(|p| p.1[1].is_ascii_alphabetic())
-            .for_each(|(i, sack)| stacks[i].push_front(sack[1] as char));
+            .filter(|p| p.1.is_ascii_alphabetic())
+            .for_each(|(i, c)| stacks[i].push_front(c));
         skip += 1;
     }
     skip += 2;
+    (skip, stacks)
+}
 
+fn part1(input: &String) {
+    let lines: Vec<&str> = input.lines().collect();
+    let (skip, mut stacks) = parse_stacks(input);
     for line in &lines[skip..] {
         let indexes: Vec<usize> = line
             .chars()
@@ -42,27 +47,13 @@ fn part1(input: &String) {
 
     println!(
         "{}",
-        stacks
-            .iter()
-            .map(|s| s.back().unwrap_or(&' '))
-            .collect::<String>()
+        stacks.iter().map(|s| s.back().unwrap()).collect::<String>()
     );
 }
 
 fn part2(input: &String) {
     let lines: Vec<&str> = input.lines().collect();
-    let mut stacks: Vec<VecDeque<char>> =
-        Vec::from_iter(std::iter::repeat(VecDeque::new()).take(9).clone());
-    let mut skip = 0;
-    for line in lines.iter().take_while(|l| !l.starts_with(" 1")) {
-        line.as_bytes()
-            .chunks(4)
-            .enumerate()
-            .filter(|p| p.1[1].is_ascii_alphabetic())
-            .for_each(|(i, sack)| stacks[i].push_front(sack[1] as char));
-        skip += 1;
-    }
-    skip += 2;
+    let (skip, mut stacks) = parse_stacks(input);
 
     for line in &lines[skip..] {
         let indexes: Vec<usize> = line
@@ -84,9 +75,6 @@ fn part2(input: &String) {
 
     println!(
         "{}",
-        stacks
-            .iter()
-            .map(|s| s.back().unwrap_or(&' '))
-            .collect::<String>()
+        stacks.iter().map(|s| s.back().unwrap()).collect::<String>()
     );
 }
