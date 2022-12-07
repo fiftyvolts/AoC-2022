@@ -1,4 +1,8 @@
-use std::{env, fs, path::{PathBuf, Path}, str::FromStr, collections::HashMap};
+use std::{
+    collections::HashMap,
+    env, fs,
+    path::{Path, PathBuf},
+};
 
 fn input_txt() -> String {
     let path = env::args().nth(1).unwrap_or(String::from("ex1.txt"));
@@ -10,66 +14,62 @@ fn main() {
     part12(&input);
 }
 
+fn canonicalize(path: &str) -> Vec<&str> {
+    let mut ret: Vec<&str> = vec![];
+    for c in path.split("/") {
+        match c {
+            "" => ret.push("/"),
+            ".." => _ = ret.pop(),
+            "." => (),
+            _ => ret.push(c),
+        }
+    }
+    ret
+}
+
 fn part12(input: &String) {
     let mut cwd: PathBuf = PathBuf::new();
-    let lines: Vec<&str> = input.lines().collect();
     let mut sizes: HashMap<String, u32> = HashMap::new();
-    let mut i = 0;
 
-    while i < lines.len() {
-        let line = lines[i];
+    // Some short cuts here but this works because all we care about
+    // is the cwd and any file sizes we encounter at that cwd
+    for line in input.lines() {
         if line.starts_with("$ cd") {
             if &line[5..6] == "/" {
-                cwd = PathBuf::from_str(&line[5..].to_string()).ok().unwrap();
-            } else {
-                for p in (&line[5..]).split("/") {
-                    if p == ".." {
-                        cwd.pop();
-                    } else {
-                        cwd.push(p);
-                    }
-                }
+                cwd.clear();
+            } else if &line[5..] == ".." || (&line[5..]).starts_with("../") {
+                cwd.pop();
             }
-            i+=1;
-        } else if line.starts_with("$ ls") {
-            i+=1;
-            while i < lines.len() && !lines[i].starts_with("$") {
-                let line = lines[i];
-                if line.starts_with("dir") {
-
-                } else {
-                    let ent : Vec<&str> = line.split(" ").collect();
-                    sizes.insert(cwd.join(ent[1]).to_str().unwrap().to_owned(), u32::from_str_radix(ent[0], 10).unwrap());
-                }
-                i+=1;
-            }
+            cwd.extend(canonicalize(&line[5..]));
+        } else if line.as_bytes()[0].is_ascii_digit() {
+            let ent: Vec<&str> = line.split(" ").collect();
+            sizes.insert(
+                cwd.join(ent[1]).display().to_string(),
+                u32::from_str_radix(ent[0], 10).unwrap(),
+            );
         }
     }
 
-    let mut sums : HashMap<String, u32> = HashMap::new();
+    // for each file, add its size to each directory before it
+    let mut sums: HashMap<String, u32> = HashMap::new();
     for (f, s) in &sizes {
-        let mut path = Path::new(f);
-        loop {
-            path = path.parent().unwrap();
-            sums.entry(path.to_str().unwrap().to_owned()).and_modify(|x| *x+=s).or_insert(*s);
-            if path.eq(Path::new("/")) {
-                break;
-            }
+        for p in Path::new(f).ancestors().skip(1) {
+            sums.entry(p.display().to_string())
+                .and_modify(|x| *x += s)
+                .or_insert(*s);
         }
     }
 
-    println!("{:?}", sums.values().filter(|s| **s<=100000).sum::<u32>());
+    println!("{:?}", sums.values().filter(|s| **s <= 100000).sum::<u32>());
 
     let total = sizes.values().sum::<u32>();
     let target = total - (70000000 - 30000000);
-
-    let mut sorted : Vec<(&u32, &String)> = sums.iter().map(|(k,v)| (v,k)).collect();
+    let mut sorted: Vec<(&u32, &String)> = sums.iter().map(|(k, v)| (v, k)).collect();
     sorted.sort();
-    for (v,k) in sorted {
+    for (v, _) in sorted {
         if *v >= target {
             println!("{}", v);
             break;
         }
     }
-    
 }
