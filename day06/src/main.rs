@@ -1,4 +1,4 @@
-use std::{env, fs};
+use std::{env, fs, collections::HashSet};
 
 fn input_txt() -> String {
     let path = env::args().nth(1).unwrap_or(String::from("ex1.txt"));
@@ -7,14 +7,15 @@ fn input_txt() -> String {
 
 fn main() {
     let input = input_txt();
-    part1(&input);
-    part2(&input);
+    part12(&input, 4);
+    part12(&input, 14);
 }
 
-fn part1(input: &String) {
-    todo!();
-}
-
-fn part2(input: &String) {
-    todo!();
+fn part12(input: &String, len: usize) {
+    for i in (len-1)..input.len() {
+        if input[(i-(len-1))..=i].chars().collect::<HashSet<char>>().len() == len {
+            println!("{}", i+1);
+            break;
+        }
+    }
 }
