@@ -7,14 +7,29 @@ fn input_txt() -> String {
 
 fn main() {
     let input = input_txt();
-    part1(&input);
-    part2(&input);
+    part12(&input);
 }
 
-fn part1(input: &String) {
-    todo!();
-}
-
-fn part2(input: &String) {
-    todo!();
+fn part12(input: &String) {
+    let mut tick = 0;
+    let mut x = 1;
+    let mut sum = 0;
+    for token in input.split_whitespace() {
+        tick += 1;
+        if (x..x + 3).contains(&(tick % 40)) {
+            print!("#");
+        } else {
+            print!(" ");
+        }
+        if tick % 40 == 0 {
+            println!("");
+        }
+        if tick >= 20 && (tick - 20) % 40 == 0 {
+            sum += x * tick;
+        }
+        if "-0123456789".contains(&token[0..1]) {
+            x += i32::from_str_radix(token, 10).unwrap();
+        }
+    }
+    println!("{}", sum);
 }
