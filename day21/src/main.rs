@@ -1,20 +1,11 @@
-use std::{env, fs};
+#[macro_use]
+extern crate lazy_static;
+use std::{env::args, fs::read_to_string};
 
-fn input_txt() -> String {
-    let path = env::args().nth(1).unwrap_or(String::from("ex1.txt"));
-    fs::read_to_string(path).ok().unwrap_or_default()
+lazy_static! {
+    static ref INPUT: String = read_to_string(args().nth(1).unwrap()).unwrap();
 }
 
 fn main() {
-    let input = input_txt();
-    part1(&input);
-    part2(&input);
-}
-
-fn part1(input: &String) {
-    todo!();
-}
-
-fn part2(input: &String) {
     todo!();
 }

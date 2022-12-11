@@ -1,23 +1,11 @@
 #[macro_use]
 extern crate lazy_static;
-use std::{env, fs};
+use std::{env::args, fs::read_to_string};
 
 lazy_static! {
-    static ref INPUT: String = env::args()
-        .nth(1)
-        .and_then(|p| fs::read_to_string(p).ok())
-        .unwrap();
+    static ref INPUT: String = read_to_string(args().nth(1).unwrap()).unwrap();
 }
 
 fn main() {
-    part1();
-    //part2();
-}
-
-fn part1() {
     todo!();
 }
-
-// fn part2() {
-//     todo!();
-// }
