@@ -1,7 +1,6 @@
 #[macro_use]
 extern crate lazy_static;
-use std::{env::args, fmt, fs::read_to_string, collections::HashSet, iter::once};
-use primes::{self, factors};
+use std::{env::args, fmt, fs::read_to_string};
 
 lazy_static! {
     static ref INPUT: String = read_to_string(args().nth(1).unwrap()).unwrap();
@@ -19,30 +18,12 @@ impl Operation {
         match self {
             Operation::Add(x) => old + x,
             Operation::Mul(x) => old * x,
-            Operation::Sqr => old * old
-        }
-    }
-    fn exec2(&self, old: Factors) -> Factors {
-        match self {
-            Operation::Add(x) => Factors::from_iter(primes::factors(old.reduce() + x)),
-            Operation::Mul(x) => old.union(&once(*x).collect()).cloned().collect(),
-            Operation::Sqr => old
-        }
-    }
-
-    fn exec3(&self, old: Factors, wrap: u64) -> Factors {
-        match self {
-            Operation::Add(x) => {
-                let mut t = old.iter().cloned().reduce(|a, i| a*i).unwrap();
-                t += x;
-                t %= wrap;
-                primes::factors(t).iter().cloned().collect()
+            Operation::Sqr => match old.checked_mul(old) {
+                Some(x) => x,
+                None => panic!("{}", old)
             },
-            Operation::Mul(x) => old.union(&HashSet::from(x.factor())).cloned().collect(),
-            Operation::Sqr => old
         }
     }
-
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -51,30 +32,9 @@ struct Test {
     yes: usize,
     no: usize,
 }
-
-type Factors = HashSet<u64>;
-trait Reducible {
-    fn reduce(&self) -> u64;
-}
-impl Reducible for Factors {
-    fn reduce(&self) -> u64 {
-        self.iter().cloned().reduce(|a, i| a*i).unwrap_or_default()
-    }
-}
-
-trait Factorable {
-    fn factor(&self) -> Factors;
-}
-
-impl Factorable for u64 {
-    fn factor(&self) -> Factors {
-        Factors::from_iter(primes::factors(*self))
-    }
-}
-
 #[derive(Clone)]
 struct Monkey {
-    items: Vec<Factors>,
+    items: Vec<u64>,
     operation: Operation,
     test: Test,
     inspections: u64,
@@ -83,7 +43,7 @@ struct Monkey {
 impl fmt::Display for Monkey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Monkey:\n")?;
-        writeln!(f, "  Starting items: {:?}", self.items.iter().map(|i| i.reduce()).collect::<Vec<u64>>())?;
+        writeln!(f, "  Starting items: {:?}", self.items)?;
         writeln!(f, "  Operation: new = {:?}", self.operation)?;
         writeln!(f, "  Test: divisible by {}", self.test.v)?;
         writeln!(f, "    If true: throw to monkey {}", self.test.yes)?;
@@ -93,7 +53,6 @@ impl fmt::Display for Monkey {
 }
 fn main() {
     part1();
-    //part2()
 }
 
 fn get_monkeys() -> Vec<Monkey> {
@@ -113,7 +72,7 @@ fn get_monkeys() -> Vec<Monkey> {
         monkeys.push(Monkey {
             items: (&chunk[1][18..])
                 .split(", ")
-                .map(|i| u64::from_str_radix(i, 10).unwrap().factor())
+                .map(|i| u64::from_str_radix(i, 10).unwrap())
                 .collect(),
             operation: op,
             test: Test {
@@ -124,23 +83,20 @@ fn get_monkeys() -> Vec<Monkey> {
             inspections: 0,
         });
     }
-    println!("{}", monkeys.iter().map(|m| m.to_string()).collect::<Vec<String>>().join("\n"));
     return monkeys;
 }
 
 fn part1() {
     let mut monkeys = get_monkeys();
-    //let factor = monkeys.iter().map(|m| m.test.v).reduce(|a, v| a*v).unwrap();
-
     for _ in 0..20 {
         for i in 0..monkeys.len() {
             let items = monkeys[i].items.clone();
             monkeys[i].items.clear();
             monkeys[i].inspections += items.len() as u64;
+
             for item in items {
-                let mut x = monkeys[i].operation.exec2(item);
-                x = (x.reduce()/3).factor();
-                let j = if x.contains(&monkeys[i].test.v) {
+                let x = monkeys[i].operation.exec(item) / 3;
+                let j = if x % monkeys[i].test.v == 0 {
                     monkeys[i].test.yes
                 } else {
                     monkeys[i].test.no
@@ -150,10 +106,6 @@ fn part1() {
         }
     }
     print_result(monkeys);
-}
-
-fn part2() {
-    
 }
 
 fn print_result(monkeys: Vec<Monkey>) {

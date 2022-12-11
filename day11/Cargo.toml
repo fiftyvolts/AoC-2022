@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 lazy_static = "1"
-primes = "0.3.0"
+num-bigint = "0.4.3"
