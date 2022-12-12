@@ -4,7 +4,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     env::args,
     fmt::Display,
-    fs::read_to_string,
+    fs::read_to_string, thread,
 };
 
 lazy_static! {
@@ -12,6 +12,8 @@ lazy_static! {
 }
 
 type Point = (i32, i32);
+
+#[derive(Clone,Copy)]
 enum Location {
     Start(),
     End(),
@@ -42,6 +44,8 @@ impl Location {
         }
     }
 }
+
+#[derive(Clone)]
 struct TopoMap {
     start: Point,
     topo: HashMap<Point, Location>,
@@ -104,11 +108,16 @@ fn main() {
     let topo_map = TopoMap::from_input();
     println!("{}", topo_map.bfs(topo_map.start));
 
-    let mut paths: Vec<i32> = vec![];
+    let mut handles = vec![];
     for start in topo_map.mins.iter().cloned() {
-        paths.push(topo_map.bfs(start));
+        let topo_clone = topo_map.clone();
+        handles.push(thread::spawn(move || topo_clone.bfs(start)));
     }
-
+    
+    let mut paths = vec![];
+    for h in handles {
+        paths.push(h.join().unwrap());
+    }
     paths.sort();
     println!("{}", paths.first().unwrap());
 }
