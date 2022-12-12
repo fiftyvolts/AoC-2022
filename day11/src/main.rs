@@ -1,6 +1,6 @@
 #[macro_use]
 extern crate lazy_static;
-use std::{env::args, fmt, fs::read_to_string};
+use std::{env::args, fs::read_to_string};
 
 lazy_static! {
     static ref INPUT: String = read_to_string(args().nth(1).unwrap()).unwrap();
@@ -37,20 +37,9 @@ struct Monkey {
     inspections: u64,
 }
 
-impl fmt::Display for Monkey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Monkey:\n")?;
-        writeln!(f, "  Starting items: {:?}", self.items)?;
-        writeln!(f, "  Operation: new = {:?}", self.operation)?;
-        writeln!(f, "  Test: divisible by {}", self.test.v)?;
-        writeln!(f, "    If true: throw to monkey {}", self.test.yes)?;
-        writeln!(f, "    If false: throw to monkey {}", self.test.no)?;
-        writeln!(f, "  Inspections: {}", self.inspections)
-    }
-}
 fn main() {
-    part1();
-    part2();
+    part(20, inspect_bored);
+    part(10000, inspect_scaled);
 }
 
 fn get_monkeys() -> Vec<Monkey> {
@@ -84,52 +73,37 @@ fn get_monkeys() -> Vec<Monkey> {
     return monkeys;
 }
 
-fn part1() {
-    let mut monkeys = get_monkeys();
-    for _ in 0..20 {
-        for i in 0..monkeys.len() {
-            let items = monkeys[i].items.clone();
-            monkeys[i].items.clear();
-            monkeys[i].inspections += items.len() as u64;
+type InspectFn = fn(&Monkey, u64, u64) -> u64;
 
-            for item in items {
-                let x = monkeys[i].operation.exec(item) / 3;
-                let j = if x % monkeys[i].test.v == 0 {
-                    monkeys[i].test.yes
-                } else {
-                    monkeys[i].test.no
-                };
-                monkeys[j].items.push(x);
-            }
-        }
-    }
-    print_result(monkeys);
+fn inspect_bored(m: &Monkey, item: u64, _: u64) -> u64 {
+    m.operation.exec(item) / 3
 }
 
-fn part2() {
+fn inspect_scaled(m: &Monkey, item: u64, factor: u64) -> u64 {
+    let x = m.operation.exec(item);
+    if x > factor {
+        (x % factor) + factor
+    } else {
+        x
+    }
+}
+
+fn part(rounds: usize, inspect_fn: InspectFn) {
     let mut monkeys = get_monkeys();
     let factor = monkeys
         .iter()
         .map(|m| m.test.v)
         .reduce(|a, v| a * v)
         .unwrap();
-    let scale = |x: u64| -> u64 {
-        if x > factor {
-            (x % factor) + factor
-        } else {
-            x
-        }
-    };
 
-    for _ in 0..10000 {
+    for _ in 0..rounds {
         for i in 0..monkeys.len() {
             let items = monkeys[i].items.clone();
             monkeys[i].items.clear();
             monkeys[i].inspections += items.len() as u64;
 
             for item in items {
-                let mut x = monkeys[i].operation.exec(item);
-                x = scale(x);
+                let x = inspect_fn(&monkeys[i], item, factor);
                 let j = if x % monkeys[i].test.v == 0 {
                     monkeys[i].test.yes
                 } else {
@@ -139,12 +113,7 @@ fn part2() {
             }
         }
     }
-    print_result(monkeys);
-}
-
-fn print_result(monkeys: Vec<Monkey>) {
     let mut inspections = monkeys.iter().map(|m| m.inspections).collect::<Vec<u64>>();
     inspections.sort_by(|a, b| b.cmp(&a));
     println!("{}", inspections[0] * inspections[1]);
-    println!("{:?}", inspections);
 }
