@@ -18,10 +18,7 @@ impl Operation {
         match self {
             Operation::Add(x) => old + x,
             Operation::Mul(x) => old * x,
-            Operation::Sqr => match old.checked_mul(old) {
-                Some(x) => x,
-                None => panic!("{}", old)
-            },
+            Operation::Sqr => old * old,
         }
     }
 }
@@ -53,6 +50,7 @@ impl fmt::Display for Monkey {
 }
 fn main() {
     part1();
+    part2();
 }
 
 fn get_monkeys() -> Vec<Monkey> {
@@ -96,6 +94,42 @@ fn part1() {
 
             for item in items {
                 let x = monkeys[i].operation.exec(item) / 3;
+                let j = if x % monkeys[i].test.v == 0 {
+                    monkeys[i].test.yes
+                } else {
+                    monkeys[i].test.no
+                };
+                monkeys[j].items.push(x);
+            }
+        }
+    }
+    print_result(monkeys);
+}
+
+fn part2() {
+    let mut monkeys = get_monkeys();
+    let factor = monkeys
+        .iter()
+        .map(|m| m.test.v)
+        .reduce(|a, v| a * v)
+        .unwrap();
+    let scale = |x: u64| -> u64 {
+        if x > factor {
+            (x % factor) + factor
+        } else {
+            x
+        }
+    };
+
+    for _ in 0..10000 {
+        for i in 0..monkeys.len() {
+            let items = monkeys[i].items.clone();
+            monkeys[i].items.clear();
+            monkeys[i].inspections += items.len() as u64;
+
+            for item in items {
+                let mut x = monkeys[i].operation.exec(item);
+                x = scale(x);
                 let j = if x % monkeys[i].test.v == 0 {
                     monkeys[i].test.yes
                 } else {
