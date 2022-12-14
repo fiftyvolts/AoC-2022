@@ -22,7 +22,7 @@
             "args": [],
             "cwd": "${workspaceFolder}",
             "env": {
-                "INPUT": "ex2.txt"
+                "INPUT": "ex1.txt"
             }
         },
         {

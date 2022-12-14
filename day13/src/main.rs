@@ -1,28 +1,23 @@
 #[macro_use]
 extern crate lazy_static;
-use regex::Regex;
 use std::{cmp::Ordering, env::var, fmt::Display, fs::read_to_string, iter::once};
 
 lazy_static! {
     static ref INPUT: String = read_to_string(var("INPUT").unwrap()).unwrap();
-    static ref PAT: Regex = Regex::new(r"\[(?P<list>.*)\]|(?P<int>\d+)").unwrap();
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 enum Packet {
     List(Vec<Packet>),
     Int(u32),
-    Null(),
 }
 
 impl Packet {
-    fn as_list(&self) -> Packet {
-        match self {
-            Packet::Int(_) => Packet::List(vec![self.clone()]),
-            _ => self.clone()
-        }
+    fn one(x: u32) -> Packet {
+        Packet::List(vec![Packet::Int(x)])
     }
 }
+
 impl PartialOrd for Packet {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
@@ -37,9 +32,8 @@ impl PartialOrd for Packet {
                 }
                 Some(r)
             }
-            (&Packet::Int(_), &Packet::List(_)) => self.as_list().partial_cmp(other),
-            (&Packet::List(_), &Packet::Int(_)) => self.partial_cmp(&other.as_list()),
-            _ => None,
+            (&Packet::Int(x), &Packet::List(_)) => Packet::one(x).partial_cmp(other),
+            (&Packet::List(_), &Packet::Int(x)) => self.partial_cmp(&Packet::one(x)),
         }
     }
 }
@@ -51,36 +45,32 @@ impl Ord for Packet {
 
 impl From<&str> for Packet {
     fn from(other: &str) -> Self {
-        let caps = PAT.captures(other).unwrap();
-        if let Some(next) = caps.name("list") {
-            let mut depth = 0;
-            let mut last = next.start();
-            let mut v = vec![];
-            let mut i = next.start();
-            while i < next.end() {
-                match &other[i..i + 1] {
-                    "[" => depth += 1,
-                    "]" => depth -= 1,
-                    "," => {
-                        if depth == 0 {
-                            let p = Packet::from(&other[last..i]);
-                            v.push(p);
-                            last = i + 1;
-                        }
-                    }
-                    _ => (),
-                }
-                i += 1;
-            }
-            if depth == 0 && last < i {
-                v.push(Packet::from(&other[last..i]));
-            }
-            Packet::List(v)
-        } else if let Some(next) = caps.name("int") {
-            Packet::Int(u32::from_str_radix(next.as_str(), 10).unwrap())
-        } else {
-            Packet::Null()
+        if other.as_bytes()[0].is_ascii_digit() {
+            return Packet::Int(u32::from_str_radix(other, 10).unwrap());
         }
+        let mut v = vec![];
+        let mut depth = 0;
+        let mut last = 1;
+        let mut i = 1;
+        while i < other.len() - 1 {
+            match &other[i..i + 1] {
+                "[" => depth += 1,
+                "]" => depth -= 1,
+                "," => {
+                    if depth == 0 {
+                        let p = Packet::from(&other[last..i]);
+                        v.push(p);
+                        last = i + 1; //skip comma
+                    }
+                }
+                _ => (),
+            }
+            i += 1;
+        }
+        if depth == 0 && last < i {
+            v.push(Packet::from(&other[last..i]));
+        }
+        Packet::List(v)
     }
 }
 
@@ -98,23 +88,26 @@ impl Display for Packet {
                         .join(",")
                 )
             }
-            Packet::Null() => write!(f, "NULL"),
         }
     }
 }
 
 fn main() {
     let lines = (*INPUT).lines().collect::<Vec<&str>>();
-    let s = lines
-        .chunks(3)
-        .enumerate()
-        .filter(|(_, c)| Packet::from(c[0]) < Packet::from(c[1]))
-        .map(|(n, _)| n + 1)
-        .sum::<usize>();
-    println!("{}", s);
+    println!(
+        "{}",
+        lines
+            .chunks(3)
+            .enumerate()
+            .filter(|(_, c)| Packet::from(c[0]) < Packet::from(c[1]))
+            .map(|(n, _)| n + 1)
+            .sum::<usize>()
+    );
 
     let d1 = Packet::from("[[2]]");
     let d2 = Packet::from("[[6]]");
+    println!("{}", d1);
+    println!("{:?}", d1);
     let mut packets = lines
         .iter()
         .filter(|l| !l.is_empty())
