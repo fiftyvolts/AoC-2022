@@ -106,8 +106,7 @@ fn main() {
 
     let d1 = Packet::from("[[2]]");
     let d2 = Packet::from("[[6]]");
-    println!("{}", d1);
-    println!("{:?}", d1);
+    
     let mut packets = lines
         .iter()
         .filter(|l| !l.is_empty())
