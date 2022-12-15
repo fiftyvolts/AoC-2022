@@ -23,7 +23,8 @@
             "cwd": "${workspaceFolder}",
             "env": {
                 "INPUT": "ex1.txt",
-                "MAX": "20"
+                "MAX": "20",
+                "TARG_Y": "10"
             }
         },
         {
