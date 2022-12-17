@@ -1,12 +1,17 @@
 #[macro_use]
 extern crate lazy_static;
-use std::{collections::{HashSet, VecDeque}, env::var, fs::read_to_string, iter::repeat};
+use std::{
+    collections::{HashSet, VecDeque},
+    env::var,
+    fs::read_to_string,
+    iter::repeat,
+};
 
-type Point = (i32, i32);
+type Point = (i64, i64);
 type Block = HashSet<Point>;
 type Rows = Block;
 
-fn offset_block(block: &Block, xoff: i32, yoff: i32) -> Block {
+fn offset_block(block: &Block, xoff: i64, yoff: i64) -> Block {
     block.iter().map(|(x, y)| (x + xoff, y + yoff)).collect()
 }
 
@@ -32,9 +37,9 @@ fn get_topo(other: &Rows) -> Block {
         return Block::new();
     }
 
-    let ymax = other.iter().map(|p| p.1).max().unwrap() + 1;
-    let mut todo = VecDeque::from([(0, ymax)]);
-    let mut visited = Block::from([(0, ymax)]);
+    let yedge = other.iter().map(|p| p.1).max().unwrap() + 1;
+    let mut todo = VecDeque::from([(0, yedge)]);
+    let mut visited = Block::from([(0, yedge)]);
     let mut ret = Block::new();
 
     while todo.len() > 0 {
@@ -44,13 +49,10 @@ fn get_topo(other: &Rows) -> Block {
             continue;
         }
 
-        for dx in -1..=1{
+        for dx in -1..=1 {
             for dy in -1..=1 {
                 let next = (curr.0 + dx, curr.1 + dy);
-                if !visited.contains(&next)
-                    && next.1 <= ymax
-                    && next.0 >= 0
-                    && next.0 <= 6 {
+                if !visited.contains(&next) && next.1 <= yedge && next.0 >= 0 && next.0 <= 6 {
                     visited.insert(next);
                     todo.push_back(next);
                 }
@@ -93,21 +95,26 @@ lazy_static! {
         Block::from([(0,0), (1,0), (0,1), (1,1)]) // []
     ];
     static ref DO_DUMP : bool = !var("DUMP").is_err();
+    static ref SKIP : bool = !var("SKIP").is_err();
 }
 
 fn main() {
     let mut jet_i = 0;
     let mut block_i = 0;
     let mut other = Rows::from_iter((0..=6).zip(repeat(-1)));
-    let mut ymax = 0;
     let mut curr;
 
     other = get_topo(&other);
 
-    let block_count = usize::from_str_radix(&var("BLOCKS").unwrap(), 10).unwrap();
+    let block_count = i64::from_str_radix(&var("BLOCKS").unwrap(), 10).unwrap();
     let mut t = 0;
-    for bc in 0..block_count {
-        curr = offset_block(&BLOCKS[block_i], 2, 3 + ymax);
+    let mut loop_check = vec![];
+    let mut keep_check = true;
+    let mut bc = 1;
+
+    while bc <= block_count {
+        let ymax = *(&other.iter().map(|p| p.1.clone()).max().unwrap());
+        curr = offset_block(&BLOCKS[block_i], 2, ymax + 4);
         block_i = (block_i + 1) % BLOCKS.len();
         dump(&curr, &other);
         loop {
@@ -133,23 +140,60 @@ fn main() {
             if !check_below(&next, &other) {
                 curr = next;
             } else {
-                let curr_ymax = *(&curr.iter().map(|p| p.1.clone()).max().unwrap());
+                let xmin = curr.iter().cloned().map(|p| p.0).min().unwrap();
+                let key = (block_i, xmin, jet_i);
+
+                if keep_check && *SKIP {
+                    let needle = loop_check
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, (k, _))| k == &key)
+                        .next();
+
+                    if needle.is_some() {
+                        println!(
+                            "{:?}/{} {} {} {}",
+                            needle.unwrap(),
+                            loop_check.len(),
+                            ymax,
+                            block_count,
+                            bc
+                        );
+
+                        let (idx, (_, start_max)) = needle.unwrap();
+                        let dy = ymax - start_max;
+
+                        let before = idx as i64;
+                        let remaining = block_count - before;
+                        let run = loop_check.len() as i64 - idx as i64;
+                        let skip = dy * ((remaining / run) - 1);
+                        bc = block_count - (remaining % run);
+                        other = offset_block(&other, 0, skip);
+                        keep_check = false;
+
+                        println!("Skipping run={} y={} to {}", run, skip, ymax + skip);
+                        println!("{} loops, {} left over.", remaining / run, remaining & run);
+                        println!("{}", bc);
+
+                        break;
+                    } else {
+                        loop_check.push((key, ymax)); //ymax before this block
+                    }
+                }
+
                 other.extend(curr.iter().cloned());
-                if curr_ymax + 1 > ymax {
-                    ymax = curr_ymax + 1
-                }
+                other = get_topo(&other);
 
-
-                if bc % 100 == 99 { 
-                    other = get_topo(&other);
-                }
                 dump(&Block::new(), &other);
                 break;
             }
 
             dump(&curr, &other);
         }
+
+        bc += 1;
     }
 
-    println!("{}", ymax);
+    let ymax = *(&other.iter().map(|p| p.1.clone()).max().unwrap());
+    println!("{}", ymax + 1);
 }
