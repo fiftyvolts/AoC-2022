@@ -72,7 +72,11 @@ fn main() {
         }
     }
 
-    _all_possible_paths(&cave, &travel);
+    if var("ELEPHANT").is_err() {
+        all_possible_paths(&cave, &travel);
+    } else {
+        elephant_paths(&cave, &travel);
+    }
 }
 
 struct PermutationIter {
@@ -116,77 +120,7 @@ impl Iterator for PermutationIter {
         Some(ret)
     }
 }
-
-fn _all_possible_paths_cached_incremental(
-    cave: &HashMap<String, Box<Valve>>,
-    travel: &HashMap<(&str, &str), Vec<&str>>,
-) {
-    let mut valve_names = cave
-        .keys()
-        .filter(|k| k != &"AA" && cave[*k].rate > 0)
-        .collect::<Vec<_>>();
-    valve_names.sort();
-
-    let mut max_release = 0;
-    let mut max_order = vec![];
-    let mut memo = HashMap::<String, (&str, usize, i32, i32)>::new();
-    
-    for i in 10.min(valve_names.len())..=valve_names.len() {
-        println!("{} out of {} deep", i, valve_names.len());
-        let mut next_memo = HashMap::new();
-
-        for order in PermutationIter::new(i) {
-            let cache_key = order
-                .iter()
-                .map(|x| valve_names[*x])
-                .cloned()
-                .collect::<String>();
-
-            let mut curr = "AA";
-            let mut time = 30;
-            let mut release = 0;
-            let mut idx = 0;
-
-            if let Some(hit) = memo.get(&cache_key[..cache_key.len() - 2]) {
-                (curr, idx, time, release) = *hit;
-            }
-
-            let mut next_idx = 0;
-            for j in idx..order.len() {
-                next_idx = j;
-                let next = valve_names[order[j]].as_str();
-                let dt = 1 + travel[&(curr, next)].len() as i32;
-                if dt > time {
-                    time = 0;
-                    break;
-                }
-                time -= dt;
-                release += time * cave[next].rate;
-                curr = next;
-            }
-
-            next_memo.insert(cache_key, (curr, next_idx + 1, time, release));
-            if release > max_release {
-                max_release = release;
-                max_order = order;
-                println!("new max {} {:?}", max_release, max_order);
-            }
-        }
-
-        memo = next_memo;
-    }
-
-    println!(
-        "{} {:?}",
-        max_release,
-        max_order
-            .iter()
-            .map(|k| valve_names[*k])
-            .collect::<Vec<_>>()
-    );
-}
-
-fn _all_possible_paths(
+fn all_possible_paths(
     cave: &HashMap<String, Box<Valve>>,
     travel: &HashMap<(&str, &str), Vec<&str>>,
 ) {
@@ -216,7 +150,14 @@ fn _all_possible_paths(
         if release > max_release {
             max_release = release;
             max_order = order;
-            println!("new max {} {:?}", max_release, max_order);
+            println!(
+                "new max {} {:?}",
+                max_release,
+                max_order
+                    .iter()
+                    .map(|k| valve_names[*k])
+                    .collect::<Vec<_>>()
+            );
         }
     }
 
@@ -230,55 +171,67 @@ fn _all_possible_paths(
     );
 }
 
-fn _find_next_bext_valve(
-    cave: &HashMap<String, Box<Valve>>,
-    travel: &HashMap<(&str, &str), Vec<&str>>,
-) {
-    let valve_names = cave.keys().collect::<Vec<_>>();
-    let mut time = 0;
-    let mut release = 0;
-    let mut curr = "AA";
-    let mut opened = HashSet::<&str>::new();
-    loop {
-        let mut max_release = 0;
-        let mut max_name = "";
-        let mut max_dt = 0;
+fn elephant_paths(cave: &HashMap<String, Box<Valve>>, travel: &HashMap<(&str, &str), Vec<&str>>) {
+    let mut valve_names = cave
+        .keys()
+        .filter(|k| k != &"AA" && cave[*k].rate > 0)
+        .collect::<Vec<_>>();
 
-        for i in 0..valve_names.len() {
-            let next_name = valve_names[i];
-            if opened.contains(next_name.as_str()) {
-                continue;
+    valve_names.sort();
+
+    let mut max_release = 0;
+    let mut max_order = vec![];
+    for order in PermutationIter::new(valve_names.len()) {
+        let mut curr = "AA";
+        let mut time = 26;
+        let mut release = 0;
+
+        //agent 1
+        for i in 0..order.len() / 2 {
+            let next = valve_names[order[i]].as_str();
+            let dt = 1 + travel[&(curr, next)].len() as i32;
+            if dt > time {
+                break;
             }
-
-            let path = travel.get(&(curr, next_name)).unwrap();
-            let next_time = 1 + path.len() as i32 + time;
-
-            if next_time >= 30 {
-                continue;
-            }
-
-            let next_valve = cave.get(next_name).unwrap();
-            let next_release = (30 - next_time) * next_valve.rate;
-            if next_release > max_release {
-                max_name = next_name;
-                max_release = next_release;
-                max_dt = next_time;
-            }
+            time -= dt;
+            release += time * cave[next].rate;
+            curr = next;
         }
 
-        if max_release == 0 {
-            break;
+        //agent 2
+        curr = "AA";
+        time = 26;
+        for i in order.len() / 2..order.len() {
+            let next = valve_names[order[i]].as_str();
+            let dt = 1 + travel[&(curr, next)].len() as i32;
+            if dt > time {
+                break;
+            }
+            time -= dt;
+            release += time * cave[next].rate;
+            curr = next;
         }
 
-        opened.insert(max_name);
-        release += max_release;
-        time = max_dt;
-        curr = max_name;
-        println!(
-            "At {} openeing {} releasing {}",
-            time, max_name, max_release
-        );
+        if release > max_release {
+            max_release = release;
+            max_order = order;
+            println!(
+                "new max {} {:?}",
+                max_release,
+                max_order
+                    .iter()
+                    .map(|k| valve_names[*k])
+                    .collect::<Vec<_>>()
+            );
+        }
     }
 
-    println!("released {}", release);
+    println!(
+        "{} {:?}",
+        max_release,
+        max_order
+            .iter()
+            .map(|k| valve_names[*k])
+            .collect::<Vec<_>>()
+    );
 }
