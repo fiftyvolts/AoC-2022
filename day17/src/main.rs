@@ -1,6 +1,6 @@
 #[macro_use]
 extern crate lazy_static;
-use std::{collections::HashSet, env::var, fs::read_to_string};
+use std::{collections::{HashSet, VecDeque}, env::var, fs::read_to_string, iter::repeat};
 
 type Point = (i32, i32);
 type Block = HashSet<Point>;
@@ -21,10 +21,43 @@ fn check_wall(block: &Block, others: &Rows) -> bool {
 fn check_below(block: &Block, other: &Rows) -> bool {
     block
         .iter()
-        .filter(|p| p.1 < 0 || other.contains(p))
+        .filter(|p| other.contains(p))
         .cloned()
         .next()
         .is_some()
+}
+
+fn get_topo(other: &Rows) -> Block {
+    if other.len() == 0 {
+        return Block::new();
+    }
+
+    let ymax = other.iter().map(|p| p.1).max().unwrap() + 1;
+    let mut todo = VecDeque::from([(0, ymax)]);
+    let mut visited = Block::from([(0, ymax)]);
+    let mut ret = Block::new();
+
+    while todo.len() > 0 {
+        let curr = todo.pop_front().unwrap();
+        if other.contains(&curr) {
+            ret.insert(curr);
+            continue;
+        }
+
+        for dx in -1..=1{
+            for dy in -1..=1 {
+                let next = (curr.0 + dx, curr.1 + dy);
+                if !visited.contains(&next)
+                    && next.1 <= ymax
+                    && next.0 >= 0
+                    && next.0 <= 6 {
+                    visited.insert(next);
+                    todo.push_back(next);
+                }
+            }
+        }
+    }
+    ret
 }
 
 fn dump(block: &Block, other: &Rows) {
@@ -65,13 +98,15 @@ lazy_static! {
 fn main() {
     let mut jet_i = 0;
     let mut block_i = 0;
-    let mut other = Rows::new();
+    let mut other = Rows::from_iter((0..=6).zip(repeat(-1)));
     let mut ymax = 0;
     let mut curr;
 
+    other = get_topo(&other);
+
     let block_count = usize::from_str_radix(&var("BLOCKS").unwrap(), 10).unwrap();
     let mut t = 0;
-    for _ in 0..block_count {
+    for bc in 0..block_count {
         curr = offset_block(&BLOCKS[block_i], 2, 3 + ymax);
         block_i = (block_i + 1) % BLOCKS.len();
         dump(&curr, &other);
@@ -103,7 +138,12 @@ fn main() {
                 if curr_ymax + 1 > ymax {
                     ymax = curr_ymax + 1
                 }
-                dump(&curr, &other);
+
+
+                if bc % 100 == 99 { 
+                    other = get_topo(&other);
+                }
+                dump(&Block::new(), &other);
                 break;
             }
 
