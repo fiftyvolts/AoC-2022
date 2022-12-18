@@ -13,6 +13,10 @@ lazy_static! {
     static ref INPUT: String = read_to_string(var("INPUT").unwrap()).unwrap();
     static ref PAT: Regex =
         Regex::new(r"Valve (\S\S) has flow rate=(\d+); tunnels? leads? to valves? (.*)").unwrap();
+
+    static ref ELEPHANT : bool = var("ELEPHANT").is_ok();
+    static ref GENETIC : bool = var("GENETIC").is_ok();
+    static ref SEED : String = var("SEED").unwrap_or_default();
 }
 
 #[derive(Debug, Clone)]
@@ -72,11 +76,29 @@ fn main() {
         }
     }
 
-    if var("ELEPHANT").is_err() {
-        all_possible_paths(&cave, &travel);
-    } else {
+    if *GENETIC {
+        genetic(&cave, &travel);
+    } if *ELEPHANT {
         elephant_paths(&cave, &travel);
+    } else {
+        all_possible_paths(&cave, &travel);
     }
+}
+
+fn genetic(cave: &HashMap<String, Box<Valve>>, travel: &HashMap<(&str, &str), Vec<&str>>) {
+    let mut valve_names;
+    
+    if *SEED != "" {
+        valve_names = *SEED.split(",").collect::<Vec<_>>();
+    } else {
+        valve_names = cave
+        .keys()
+        .filter(|k| k != &"AA" && cave[*k].rate > 0)
+        .collect::<Vec<_>>();
+        valve_names.sort_by(|a, b| cave[*a].rate.cmp(&cave[*b].rate));
+    }
+
+
 }
 
 fn path_pressure(
