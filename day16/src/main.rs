@@ -79,6 +79,28 @@ fn main() {
     }
 }
 
+fn path_pressure(
+    cave: &HashMap<String, Box<Valve>>,
+    travel: &HashMap<(&str, &str), Vec<&str>>,
+    path: Vec<&str>,
+    start_time: i32
+) -> i32 {
+    let mut curr = path[0];
+    let mut time = start_time;
+    let mut release = 0;
+    for i in 1..path.len() {
+        let next = path[i];
+        let dt = 1 + travel[&(curr, next)].len() as i32;
+        if dt > time {
+            return release;
+        }
+        curr = next;
+        time -= dt;
+        release += time * cave[next].rate;
+    }
+    release
+}
+
 struct PermutationIter {
     regs: Vec<usize>,
     done: bool,
