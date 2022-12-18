@@ -62,11 +62,12 @@ fn get_topo(other: &Rows) -> Block {
     ret
 }
 
-fn dump(block: &Block, other: &Rows) {
-    if !*DO_DUMP {
-        return;
-    }
+fn down_scale(block: &Block) -> Block {
+    let ymin = block.iter().map(|p| p.1).min().unwrap();
+    offset_block(block, 0, -ymin)
+}
 
+fn dump(block: &Block, other: &Rows) {
     let ymax = other.iter().chain(block.iter()).map(|p| p.1).max().unwrap();
 
     for y in (0..=ymax).rev() {
@@ -94,31 +95,70 @@ lazy_static! {
         Block::from([(0,0), (0,1), (0,2), (0,3)]), // |
         Block::from([(0,0), (1,0), (0,1), (1,1)]) // []
     ];
-    static ref DO_DUMP : bool = !var("DUMP").is_err();
-    static ref SKIP : bool = !var("SKIP").is_err();
+    static ref DUMP : bool = var("DUMP").is_ok();
+    static ref SKIP : bool = var("SKIP").is_ok();
 }
 
 fn main() {
     let mut jet_i = 0;
     let mut block_i = 0;
     let mut other = Rows::from_iter((0..=6).zip(repeat(-1)));
-    let mut curr;
+    let mut curr: Block;
 
     other = get_topo(&other);
 
     let block_count = i64::from_str_radix(&var("BLOCKS").unwrap(), 10).unwrap();
     let mut t = 0;
-    let mut loop_check = vec![];
-    let mut keep_check = true;
+    let mut cycle: Vec<((Block, usize, usize), i64)> = vec![];
     let mut bc = 1;
 
     while bc <= block_count {
         let ymax = *(&other.iter().map(|p| p.1.clone()).max().unwrap());
+
+        if *SKIP {
+            let key = (down_scale(&other), jet_i, block_i);
+            let needle = cycle
+                .iter()
+                .enumerate()
+                .filter(|(_, (k, _))| k == &key)
+                .next();
+
+            if needle.is_none() {
+                cycle.push((key, ymax)); //ymax before this block
+            } else {
+                let (idx, (_, start_max)) = needle.unwrap();
+
+                println!("Cycle reached {} {} {} {}", idx, key.1, key.2, start_max);
+                if *DUMP {
+                    dump(&Block::new(), &key.0);
+                }
+                let dy = ymax - start_max;
+                let run = (cycle.len() - idx) as i64;
+
+                let cycle_block_count = block_count - idx as i64;
+                let skip = dy * (cycle_block_count / run);
+
+                let final_steps = (cycle_block_count % run) as usize;
+                let final_skip = cycle[idx + final_steps].1 - start_max;
+
+                println!(
+                    "Skipped to {} + {} + {} + 1 = {}",
+                    start_max,
+                    skip,
+                    final_skip,
+                    start_max + skip + final_skip + 1
+                );
+                return;
+            }
+        }
+
         curr = offset_block(&BLOCKS[block_i], 2, ymax + 4);
         block_i = (block_i + 1) % BLOCKS.len();
+        if *DUMP {
         dump(&curr, &other);
+        }
         loop {
-            if *DO_DUMP {
+            if *DUMP {
                 println!("{} {} {}", t, &INPUT[jet_i..=jet_i], jet_i);
             }
             t += 1;
@@ -140,55 +180,18 @@ fn main() {
             if !check_below(&next, &other) {
                 curr = next;
             } else {
-                let xmin = curr.iter().cloned().map(|p| p.0).min().unwrap();
-                let key = (block_i, xmin, jet_i);
-
-                if keep_check && *SKIP {
-                    let needle = loop_check
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, (k, _))| k == &key)
-                        .next();
-
-                    if needle.is_some() {
-                        println!(
-                            "{:?}/{} {} {} {}",
-                            needle.unwrap(),
-                            loop_check.len(),
-                            ymax,
-                            block_count,
-                            bc
-                        );
-
-                        let (idx, (_, start_max)) = needle.unwrap();
-                        let dy = ymax - start_max;
-
-                        let before = idx as i64;
-                        let remaining = block_count - before;
-                        let run = loop_check.len() as i64 - idx as i64;
-                        let skip = dy * ((remaining / run) - 1);
-                        bc = block_count - (remaining % run);
-                        other = offset_block(&other, 0, skip);
-                        keep_check = false;
-
-                        println!("Skipping run={} y={} to {}", run, skip, ymax + skip);
-                        println!("{} loops, {} left over.", remaining / run, remaining & run);
-                        println!("{}", bc);
-
-                        break;
-                    } else {
-                        loop_check.push((key, ymax)); //ymax before this block
-                    }
-                }
-
                 other.extend(curr.iter().cloned());
                 other = get_topo(&other);
 
-                dump(&Block::new(), &other);
+                if *DUMP {
+                    dump(&Block::new(), &other);
+                }
                 break;
             }
 
-            dump(&curr, &other);
+            if *DUMP {
+                dump(&curr, &other);
+            }
         }
 
         bc += 1;

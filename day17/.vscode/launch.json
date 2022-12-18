@@ -23,8 +23,8 @@
             "cwd": "${workspaceFolder}",
             "env": {
                 "INPUT": "ex1.txt",
-                "BLOCKS": "2",
-                "DUMP": "1"
+                "BLOCKS": "2022",
+                "SKIP": ""
             }
         },
         {
