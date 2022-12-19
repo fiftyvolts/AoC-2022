@@ -78,7 +78,7 @@ fn main() {
 
     if *GENETIC {
         genetic(&cave, &travel);
-    } if *ELEPHANT {
+    } else if *ELEPHANT {
         elephant_paths(&cave, &travel);
     } else {
         all_possible_paths(&cave, &travel);
@@ -86,32 +86,56 @@ fn main() {
 }
 
 fn genetic(cave: &HashMap<String, Box<Valve>>, travel: &HashMap<(&str, &str), Vec<&str>>) {
-    let mut valve_names;
+    let mut valve_names : Vec<String>;
     
     if *SEED != "" {
-        valve_names = *SEED.split(",").collect::<Vec<_>>();
+        valve_names = SEED.split(",").map(|s| String::from(s)).collect::<Vec<_>>();
     } else {
         valve_names = cave
         .keys()
         .filter(|k| k != &"AA" && cave[*k].rate > 0)
+        .cloned()
         .collect::<Vec<_>>();
-        valve_names.sort_by(|a, b| cave[*a].rate.cmp(&cave[*b].rate));
+        valve_names.sort_by(|a, b| cave[a].rate.cmp(&cave[b].rate));
     }
 
+    println!("{:?}", *SEED);
+    let path : Vec<&str> = valve_names.iter().map(|s| s.as_str()).collect();
+    println!("{}", modal_path_pressure(cave, travel, &path[..]));
 
+    // for i in 0..valve_names.len() {
+    //     for j in 0..valve_names.len() {
+
+    //     }
+    // }
+
+}
+
+fn modal_path_pressure(
+    cave: &HashMap<String, Box<Valve>>,
+    travel: &HashMap<(&str, &str), Vec<&str>>,
+    path: &[&str]
+) -> i32 {
+    if *ELEPHANT {
+        path_pressure(cave, travel, &path[..path.len()/2], 26) + 
+        path_pressure(cave, travel, &path[path.len()/2..], 26)
+    } else {
+        path_pressure(cave, travel, path, 30)
+    }
 }
 
 fn path_pressure(
     cave: &HashMap<String, Box<Valve>>,
     travel: &HashMap<(&str, &str), Vec<&str>>,
-    path: Vec<&str>,
+    path: &[&str],
     start_time: i32
 ) -> i32 {
-    let mut curr = path[0];
+    let mut curr = "AA";
     let mut time = start_time;
     let mut release = 0;
-    for i in 1..path.len() {
+    for i in 0..path.len() {
         let next = path[i];
+        
         let dt = 1 + travel[&(curr, next)].len() as i32;
         if dt > time {
             return release;
@@ -119,9 +143,11 @@ fn path_pressure(
         curr = next;
         time -= dt;
         release += time * cave[next].rate;
+        println!("{} {}", next, release);
     }
     release
 }
+
 
 struct PermutationIter {
     regs: Vec<usize>,
