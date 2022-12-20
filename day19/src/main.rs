@@ -1,6 +1,6 @@
 #[macro_use]
 extern crate lazy_static;
-use std::{collections::HashMap, env::var, fs::read_to_string, thread::spawn};
+use std::{collections::HashMap, env::var, fs::read_to_string, sync::mpsc::channel, thread::spawn};
 
 use regex::Regex;
 
@@ -59,11 +59,6 @@ impl From<&str> for Blueprint {
     }
 }
 
-fn calculate_output(bp: &Blueprint) -> i32 {
-    let mut memo = HashMap::new();
-    partial_output(bp, [1, 0, 0, 0], [0; 4], *TIME, &mut memo)
-}
-
 fn credit(amount: ResSet, res: ResSet) -> ResSet {
     [
         res[0] + amount[0],
@@ -95,11 +90,18 @@ fn build(og: ResSet, robot: Res) -> ResSet {
     }
 }
 
+fn calculate_output(bp: &Blueprint) -> i32 {
+    let mut memo = HashMap::new();
+    partial_output(bp, [1, 0, 0, 0], [0; 4], *TIME, 0, 0, &mut memo)
+}
+
 fn partial_output(
     bp: &Blueprint,
     robos: ResSet,
     res: ResSet,
     t: i32,
+    pauses: i32,
+    best: i32,
     memo: &mut HashMap<(ResSet, ResSet, i32), i32>,
 ) -> i32 {
     let memo_key = (robos, res, t);
@@ -113,31 +115,39 @@ fn partial_output(
         return res[Res::Crystal as usize];
     }
 
+    if (res[Res::Crystal as usize] + (robos[Res::Crystal as usize] + t) * t) < best {
+        return 0;
+    }
+
     let next_res = credit(robos, res);
-    let mut ret = 0;
+    let mut ret = best;
 
     if sufficient(bp.costs[Res::Crystal as usize], res) {
         let next_robos = build(robos, Res::Crystal);
 
         let debited = debit(bp.costs[Res::Crystal as usize], next_res);
-        ret = partial_output(bp, next_robos, debited, next_t, memo);
+        ret = partial_output(bp, next_robos, debited, next_t, pauses, ret, memo);
     } else {
+        let mut built = false;
         // build other robot
         for robo_t in Res::Ore as usize..=Res::Glass as usize {
-            if sufficient(bp.costs[robo_t], res) {
+            if robos[robo_t] < *TIME / 2 && sufficient(bp.costs[robo_t], res) {
+                built = true;
                 let next_robos = build(robos, robo_t.into());
                 let debited = debit(bp.costs[robo_t], next_res);
-                let next_ret = partial_output(bp, next_robos, debited, next_t, memo);
+                let next_ret = partial_output(bp, next_robos, debited, next_t, pauses, ret, memo);
                 if next_ret > ret {
                     ret = next_ret
                 }
             }
         }
 
-        //build nothing
-        let next_ret = partial_output(bp, robos, next_res, next_t, memo);
-        if next_ret > ret {
-            ret = next_ret
+        if built == false || next_t > *TIME / 4 {
+            //build nothing
+            let next_ret = partial_output(bp, robos, next_res, next_t, pauses + 1, ret, memo);
+            if next_ret > ret {
+                ret = next_ret
+            }
         }
     }
 
@@ -161,25 +171,33 @@ fn main() {
 
     let mut handlers = vec![];
 
+    let (sender, reciever) = channel::<(i32, i32, i32)>();
     for bp in &blueprints {
         let local_bp = bp.clone();
+        let local_sender = sender.clone();
         handlers.push(spawn(move || {
             let output = calculate_output(&local_bp);
-            (local_bp.id, output, local_bp.id * output)
+            local_sender
+                .send((local_bp.id, output, local_bp.id * output))
+                .unwrap();
         }));
     }
 
     let mut results = vec![];
-    for h in handlers {
-        let r = h.join().unwrap();
+    loop {
+        if handlers.iter().all(|h| h.is_finished()) {
+            break;
+        }
+
+        let r = reciever.recv().unwrap();
+
         println!("\n{:?}", r);
         results.push(r);
     }
 
-
     println!("\n{:?}", results);
     if *PART2 {
-        println!("{}", results.iter().fold(1, |acc, r| acc*r.1));
+        println!("{}", results.iter().fold(1, |acc, r| acc * r.1));
     } else {
         println!("{}", results.iter().map(|r| r.2).sum::<i32>());
     }
