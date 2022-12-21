@@ -23,15 +23,22 @@ while ( $next < @nums ) {
         next;
     }
 
+    my $dx = $t->[1];
+    if ($dx > @nums ) {
+       $dx = ($dx % @nums) + int($dx/@nums);
+    } eslif ( $dx < -@nums) {
+        $dx = ($dx % @nums) - int($idx/@nums);
+    }
+
     my $nidx;
-    if ( $t->[1] > 0 ) {
-        $nidx = ( $idx + $t->[1] ) % @nums;
+    if ( $dx > 0 ) {
+        $nidx = ( $idx + $dx ) % @nums;
         if ( $nidx == $#nums ) {
             $nidx = 0;
         }
     }
-    elsif ( $t->[1] < 0 ) {
-        $nidx = ( ( $idx + $t->[1] ) % @nums ) - 1;
+    elsif ( $dx < 0 ) {
+        $nidx = ( ( $idx + $dx->[1] ) % @nums ) - 1;
         if ( $nidx == -1 ) {
             $nidx = $#nums;
         }
