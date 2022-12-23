@@ -8,6 +8,7 @@ lazy_static! {
     static ref INPUT: String = read_to_string(var("INPUT").unwrap()).unwrap();
     static ref RE: Regex = Regex::new(r"\d+|[RL]").unwrap();
     static ref DEBUG: bool = var("DEBUG").is_ok();
+    static ref PART2: bool = var("PART2").is_ok();
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -17,7 +18,7 @@ enum Tile {
     Null,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum Facing {
     Right = 0,
     Down = 1,
@@ -43,7 +44,7 @@ impl From<&str> for Dir {
 }
 
 type Point = (i32, i32);
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Cretin {
     pos: Point,
     face: Facing,
@@ -51,6 +52,7 @@ struct Cretin {
 
 struct Tiles {
     tiles: HashMap<Point, Tile>,
+    xfer: HashMap<Cretin, Cretin>,
     max: Point,
 }
 
@@ -67,61 +69,174 @@ impl Tiles {
                 }
             }
         }
-        Tiles { tiles: tiles, max }
+        let mut xfer = HashMap::new();
+
+        if *PART2 {
+            //  x:  50- 99 y:   -1 Up
+            for x in 50..=99 {
+                xfer.insert(
+                    Cretin {pos: (x, -1), face: Facing::Up},
+                    Cretin {pos: (999, 999), face: Facing::Up}
+                );
+            }
+
+            //  x: 100-149 y:   -1 Up
+            for x in 100..=149 {
+                xfer.insert(
+                    Cretin {pos: (x, -1), face: Facing::Up},
+                    Cretin {pos: (999, 999), face: Facing::Up}
+                );
+            }
+            //  x:      49 y:   0- 49 Left
+            for y in 0..=49 {
+                xfer.insert(
+                    Cretin {pos: (49, y), face: Facing::Left},
+                    Cretin {pos: (999, 999), face: Facing::Up}
+                );
+            }
+            //  x:     149 y:   0- 49 Right
+            for y in 0..=49 {
+                xfer.insert(
+                    Cretin {pos: (149, y), face: Facing::Right},
+                    Cretin {pos: (999, 999), face: Facing::Up}
+                );
+            }
+            //  x: 100-149 y:      49 Down
+            for x in 100..=149 {
+                xfer.insert(
+                    Cretin {pos: (x, 49), face: Facing::Down},
+                    Cretin {pos: (999, 999), face: Facing::Up}
+                );
+            }
+            //  x:      49 y:  50- 99 Left
+            for y in 50..=99 {
+                xfer.insert(
+                    Cretin {pos: (49, y), face: Facing::Left},
+                    Cretin {pos: (999, 999), face: Facing::Up}
+                );
+            }
+
+            //  x:     100 y:  50- 99 Right
+            for y in 50..=99 {
+                xfer.insert(
+                    Cretin {pos: (100, y), face: Facing::Right},
+                    Cretin {pos: (999, 999), face: Facing::Up}
+                );
+            }
+
+            //  x:   0- 49 y:      99 Up
+            for x in 0..=49 {
+                xfer.insert(
+                    Cretin {pos: (x, 99), face: Facing::Up},
+                    Cretin {pos: (999, 999), face: Facing::Up}
+                );
+            }
+
+            //  x:      -1 y: 100-149 Left
+            for y in 100..=149 {
+                xfer.insert(
+                    Cretin {pos: (-1, y), face: Facing::Left},
+                    Cretin {pos: (999, 999), face: Facing::Up}
+                );
+            }
+            //  x:     100 y: 100-149 Right
+            for y in 100..=149 {
+                xfer.insert(
+                    Cretin {pos: (100, y), face: Facing::Right},
+                    Cretin {pos: (999, 999), face: Facing::Up}
+                );
+            }
+            
+            //  x:  50- 99 y:     150 Down
+            for x in 50..=99 {
+                xfer.insert(
+                    Cretin {pos: (x, 150), face: Facing::Down},
+                    Cretin {pos: (999, 999), face: Facing::Up}
+                );
+            }
+
+            //  x:      -1 y: 150-199 Left
+            for y in 100..=149 {
+                xfer.insert(
+                    Cretin {pos: (-1, y), face: Facing::Left},
+                    Cretin {pos: (999, 999), face: Facing::Up}
+                );
+            }
+            //  x:      50 y: 150-199 Right
+            for y in 150..=199 {
+                xfer.insert(
+                    Cretin {pos: (50, y), face: Facing::Right},
+                    Cretin {pos: (999, 999), face: Facing::Up}
+                );
+            }
+            //  x:   0- 49 y: 200 Down
+            for x in 0..=49 {
+                xfer.insert(
+                    Cretin {pos: (x, 200), face: Facing::Down},
+                    Cretin {pos: (999, 999), face: Facing::Up}
+                );
+            }
+        }
+
+        Tiles {tiles, xfer, max }
     }
 
-    fn inc_x(&self, p1: Point) -> Point {
-        let mut p2 = (p1.0 + 1, p1.1);
+    fn inc_x(&self, c1: Cretin) -> Cretin {
+        let mut c2 = c1;
+        c2.pos.0 += 1;
         loop {
-            if p2.0 > self.max.0 {
-                p2.0 = 0;
+            if c2.pos.0 > self.max.0 {
+                c2.pos.0 = 0;
             }
-            match self.tiles[&p2] {
-                Tile::Wall => return p1,
-                Tile::Open => return p2,
-                Tile::Null => p2.0 += 1,
+            match self.tiles[&c2.pos] {
+                Tile::Wall => return c1,
+                Tile::Open => return c2,
+                Tile::Null => c2.pos.0 += 1,
             }
         }
     }
 
-    fn dec_x(&self, p1: Point) -> Point {
-        let mut p2 = (p1.0 - 1, p1.1);
+    fn dec_x(&self, c1: Cretin) -> Cretin {
+        let mut c2 = c1;
+        c2.pos.0 -= 1;
         loop {
-            if p2.0 < 0 {
-                p2.0 = self.max.0;
+            if c2.pos.0 < 0 {
+                c2.pos.0 = self.max.0;
             }
-            match self.tiles[&p2] {
-                Tile::Wall => return p1,
-                Tile::Open => return p2,
-                Tile::Null => p2.0 -= 1,
+            match self.tiles[&c2.pos] {
+                Tile::Wall => return c1,
+                Tile::Open => return c2,
+                Tile::Null => c2.pos.0 -= 1,
             }
         }
     }
 
-    fn inc_y(&self, p1: Point) -> Point {
-        let mut p2 = (p1.0, p1.1 + 1);
+    fn inc_y(&self, c1: Cretin) -> Cretin {
+        let mut c2 = c1;
+        c2.pos.1 += 1;
         loop {
-            if p2.1 > self.max.1 {
-                p2.1 = 0;
+            if c2.pos.1 > self.max.1 {
+                c2.pos.1 = 0;
             }
-            match self.tiles[&p2] {
-                Tile::Wall => return p1,
-                Tile::Open => return p2,
-                Tile::Null => p2.1 += 1,
+            match self.tiles[&c2.pos] {
+                Tile::Wall => return c1,
+                Tile::Open => return c2,
+                Tile::Null => c2.pos.1 += 1,
             }
         }
     }
 
-    fn dec_y(&self, p1: Point) -> Point {
-        let mut p2 = (p1.0, p1.1 - 1);
+    fn dec_y(&self, c1: Cretin) -> Cretin {
+        let mut c2 = c1;
+        c2.pos.1 -= 1;
         loop {
-            if p2.1 < 0 {
-                p2.1 = self.max.1;
+            if c2.pos.1 < 0 {
+                c2.pos.1 = self.max.1;
             }
-            match self.tiles[&p2] {
-                Tile::Wall => return p1,
-                Tile::Open => return p2,
-                Tile::Null => p2.1 -= 1,
+            match self.tiles[&c2.pos] {
+                Tile::Wall => return c1,
+                Tile::Open => return c2,
+                Tile::Null => c2.pos.1 -= 1,
             }
         }
     }
@@ -133,22 +248,22 @@ impl Cretin {
         match (dir, self.face) {
             (Dir::Move(ds), Facing::Up) => {
                 for _ in 0..ds {
-                    ret.pos = map.dec_y(ret.pos);
+                    ret = map.dec_y(ret);
                 }
             }
             (Dir::Move(ds), Facing::Down) => {
                 for _ in 0..ds {
-                    ret.pos = map.inc_y(ret.pos);
+                    ret = map.inc_y(ret);
                 }
             }
             (Dir::Move(ds), Facing::Left) => {
                 for _ in 0..ds {
-                    ret.pos = map.dec_x(ret.pos);
+                    ret = map.dec_x(ret);
                 }
             }
             (Dir::Move(ds), Facing::Right) => {
                 for _ in 0..ds {
-                    ret.pos = map.inc_x(ret.pos);
+                    ret = map.inc_x(ret);
                 }
             }
 
@@ -226,6 +341,7 @@ fn dump(map: &Tiles, cretin: &Cretin) {
     for y in 0..=map.max.1 {
         for x in 0..map.max.0 {
             let p = (x, y);
+            
             if p == cretin.pos {
                 match cretin.face {
                     Facing::Up => print!("🔼"),
