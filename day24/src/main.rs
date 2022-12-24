@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     env::var,
     fs::read_to_string,
 };
@@ -39,67 +39,42 @@ struct Blizzard {
     p: Point,
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Mount {
     bliz: Vec<Blizzard>,
     start: Point,
     end: Point,
-    curr: Point,
     max: Point,
 }
 
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+struct State {
+    step: i32,
+    curr: Point,
+}
+
 impl Mount {
-    fn inc_bliz(&self, b: Blizzard) -> Point {
+    fn inc_bliz(&self, b: Blizzard, t: i32) -> Point {
         match b.face {
-            Facing::Up => {
-                if b.p.1 == 0 {
-                    (b.p.0, self.max.1)
-                } else {
-                    (b.p.0, (b.p.1 - 1))
-                }
-            }
-            Facing::Down => {
-                if b.p.1 == self.max.1 {
-                    (b.p.0, 0)
-                } else {
-                    (b.p.0, (b.p.1 + 1))
-                }
-            }
-            Facing::Left => {
-                if b.p.0 == 0 {
-                    (self.max.0, b.p.1)
-                } else {
-                    ((b.p.0 - 1), b.p.1)
-                }
-            }
-            Facing::Right => {
-                if b.p.0 == self.max.0 {
-                    (0, b.p.1)
-                } else {
-                    (b.p.0 + 1, b.p.1)
-                }
-            }
+            Facing::Up => (b.p.0, (b.p.1 - t).rem_euclid(self.max.1 + 1)),
+            Facing::Down => (b.p.0, (b.p.1 + t).rem_euclid(self.max.1 + 1)),
+            Facing::Left => ((b.p.0 - t).rem_euclid(self.max.0 + 1), b.p.1),
+            Facing::Right => ((b.p.0 + t).rem_euclid(self.max.0 + 1), b.p.1),
         }
     }
 
-    fn step(&self) -> Self {
-        Self {
-            bliz: self
-                .bliz
-                .iter()
-                .map(|b| Blizzard {
-                    p: self.inc_bliz(*b),
-                    face: b.face,
-                })
-                .collect(),
-            start: self.start,
-            end: self.end,
-            curr: self.curr,
-            max: self.max,
-        }
+    fn step(&self, t: i32) -> Vec<Blizzard> {
+        self.bliz
+            .iter()
+            .map(|b| Blizzard {
+                p: self.inc_bliz(*b, t),
+                face: b.face,
+            })
+            .collect()
     }
 
-    fn adj(&self, p0: Point) -> Vec<Point> {
+    fn adj(&self, state: State) -> Vec<Point> {
+        let p0 = state.curr;
         [(0, -1), (0, 1), (-1, 0), (1, 0), (0, 0)]
             .iter()
             .filter_map(|ds| {
@@ -116,15 +91,15 @@ impl Mount {
             .collect()
     }
 
-    fn dump(&self) {
-        println!("{:?} / {:?} => {:?}", self.curr, self.max, self.end);
+    fn dump(&self, state: State) {
+        println!("{:?} / {:?} => {:?}", state.curr, self.max, self.end);
         print!(" 🟦");
         for x in 0..=self.max.0 {
             if x == self.start.0 {
-                if self.curr == self.start {
+                if state.curr == self.start {
                     print!("🧝");
                 } else {
-                print!("⬜");
+                    print!("⬜");
                 }
             } else {
                 print!("🟦");
@@ -134,7 +109,7 @@ impl Mount {
         for y in 0..=self.max.1 {
             print!(" 🟦");
             'grid: for x in 0..=self.max.0 {
-                for b in &self.bliz {
+                for b in &self.step(state.step) {
                     if (x, y) == b.p {
                         match b.face {
                             Facing::Up => print!("⏫"),
@@ -145,7 +120,7 @@ impl Mount {
                         continue 'grid;
                     }
                 }
-                if self.curr == (x, y) {
+                if state.curr == (x, y) {
                     print!("🧝");
                 } else {
                     print!("⬜");
@@ -171,7 +146,6 @@ fn load() -> Mount {
         bliz: vec![],
         start: (-1, -1),
         end: (-1, -1),
-        curr: (-1, -1),
         max: (-1, -1),
     };
     let mut last_open = -1;
@@ -201,7 +175,6 @@ fn load() -> Mount {
         }
     }
     mount.end = (last_open, mount.max.1 + 1);
-    mount.curr = mount.start;
     mount
 }
 
@@ -209,42 +182,61 @@ fn main() {
     let mount = load();
 
     if *DEBUG {
-        mount.dump();
+        mount.dump(State {
+            step: 0,
+            curr: mount.start,
+        });
     }
-
-    println!("{}", round(&mount));
+    let mut state = round(
+        &mount,
+        State {
+            step: 0,
+            curr: mount.start,
+        },
+        mount.end,
+    );
+    println!("{:?}", state);
+    state = round(&mount, state, mount.start);
+    println!("{:?}", state);
+    state = round(&mount, state, mount.end);
+    println!("{:?}", state);
 }
 
-fn round(initial: &Mount) -> u32 {
-    let mut queue = VecDeque::from([(0, initial.clone())]);
+fn round(initial: &Mount, initial_state: State, goal: Point) -> State {
+    let mut queue = VecDeque::from([initial_state]);
     let mut visited = HashSet::new();
+    let mut blizzards = HashMap::from([(0, initial.bliz.clone())]);
 
-    while let Some((step,  mount)) = queue.pop_front() {
-        visited.insert(mount.clone());
-
+    while let Some(state) = queue.pop_front() {
         if *DEBUG {
-            mount.dump();
+            initial.dump(state);
         }
 
-        let opts = mount.adj(mount.curr);
-        let mut next = mount.step();
+        let opts = initial.adj(state);
         'check_opt: for opt in opts {
-            if opt == mount.end {
-                return step + 1;
+            let next = State {
+                curr: opt,
+                step: state.step + 1,
+            };
+            if opt == goal {
+                return next;
             }
 
-            for b in &next.bliz {
+            let bvec = blizzards
+                .entry(next.step)
+                .or_insert(initial.step(next.step));
+            for b in bvec {
                 if opt == b.p {
                     continue 'check_opt;
                 }
             }
 
-            next.curr = opt;
             if !visited.contains(&next) {
-                queue.push_back((step + 1,  next.clone()));
+                visited.insert(next);
+                queue.push_back(next);
             }
         }
     }
 
-    return 0;
+    panic!("Did not find path");
 }
