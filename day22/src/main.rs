@@ -1,6 +1,6 @@
 #[macro_use]
 extern crate lazy_static;
-use std::{collections::HashMap, env::var, fs::read_to_string};
+use std::{collections::HashMap, env::var, fs::read_to_string, sync::Mutex};
 
 use regex::Regex;
 
@@ -8,6 +8,8 @@ lazy_static! {
     static ref INPUT: String = read_to_string(var("INPUT").unwrap()).unwrap();
     static ref RE: Regex = Regex::new(r"\d+|[RL]").unwrap();
     static ref DEBUG: bool = var("DEBUG").is_ok();
+    static ref TRACE: bool = var("TRACE").is_ok();
+    static ref TRACE_PATH : bool = var("TRACE_PATH").is_ok();
     static ref PART2: bool = var("PART2").is_ok();
 }
 
@@ -77,18 +79,21 @@ impl Tiles {
         let mut c2 = c1;
         c2.pos.0 += 1;
         loop {
-            if c2.pos.0 > self.max.0 {
+            if !*PART2 &&  c2.pos.0 > self.max.0 {
                 c2.pos.0 = 0;
             }
             match self.tiles[&c2.pos] {
                 Tile::Wall => return c1,
                 Tile::Open => return c2,
-                Tile::Null => c2.pos.0 += 1,
-                Tile::Warp(warp, c) =>  {
-                    if *DEBUG {
-                        println!("Warp {} from {:?} to {:?}", c, c1, c2);
+                Tile::Null => {
+                    if *PART2 {
+                        panic!("Hit a null {:?}", c2);
                     }
-                    return warp(c2)
+                    c2.pos.0 += 1;
+                },
+                Tile::Warp(warp, c) =>  {
+                    c2 = warp(c2);
+                    warp_trace(c, c1, c2);
                 },
             }
         }
@@ -98,18 +103,21 @@ impl Tiles {
         let mut c2 = c1;
         c2.pos.0 -= 1;
         loop {
-            if c2.pos.0 < 0 {
+            if !*PART2 && c2.pos.0 < 0 {
                 c2.pos.0 = self.max.0;
             }
             match self.tiles[&c2.pos] {
                 Tile::Wall => return c1,
                 Tile::Open => return c2,
-                Tile::Null => c2.pos.0 -= 1,
-                Tile::Warp(warp, c) =>  {
-                    if *DEBUG {
-                        println!("Warp {} from {:?} to {:?}", c, c1, c2);
+                Tile::Null =>  {
+                    if *PART2 {
+                        panic!("Hit a null {:?}", c2);
                     }
-                    return warp(c2)
+                    c2.pos.0 -= 1;
+                },
+                Tile::Warp(warp, c) =>  {
+                    c2 = warp(c2);
+                    warp_trace(c, c1, c2);
                 },
             }
         }
@@ -119,18 +127,21 @@ impl Tiles {
         let mut c2 = c1;
         c2.pos.1 += 1;
         loop {
-            if c2.pos.1 > self.max.1 {
+            if !*PART2 && c2.pos.1 > self.max.1 {
                 c2.pos.1 = 0;
             }
             match self.tiles[&c2.pos] {
                 Tile::Wall => return c1,
                 Tile::Open => return c2,
-                Tile::Null => c2.pos.1 += 1,
-                Tile::Warp(warp, c) =>  {
-                    if *DEBUG {
-                        println!("Warp {} from {:?} to {:?}", c, c1, c2);
+                Tile::Null =>  {
+                    if *PART2 {
+                        panic!("Hit a null {:?}", c2);
                     }
-                    return warp(c2)
+                    c2.pos.1 += 1;
+                },
+                Tile::Warp(warp, c) =>  {
+                    c2 = warp(c2);
+                    warp_trace(c, c1, c2);
                 },
             }
         }
@@ -140,22 +151,47 @@ impl Tiles {
         let mut c2 = c1;
         c2.pos.1 -= 1;
         loop {
-            if c2.pos.1 < 0 {
+            if !*PART2 && c2.pos.1 < 0 {
                 c2.pos.1 = self.max.1;
             }
             match self.tiles[&c2.pos] {
                 Tile::Wall => return c1,
                 Tile::Open => return c2,
-                Tile::Null => c2.pos.1 -= 1,
-                Tile::Warp(warp, c) =>  {
-                    if *DEBUG {
-                        println!("Warp {} from {:?} to {:?}", c, c1, c2);
+                Tile::Null =>  {
+                    if *PART2 {
+                        panic!("Hit a null {:?}", c2);
                     }
-                    return warp(c2)
+                    c2.pos.1 -= 1;
+                },
+                Tile::Warp(warp, c) =>  {
+                    c2 = warp(c2);
+                    warp_trace(c, c1, c2);
                 },
             }
         }
     }
+}
+lazy_static! {
+    static ref TRACE_MAP : Mutex<HashMap<Point, Cretin>> = Mutex::new(HashMap::new());
+}
+
+fn trace(c: Cretin) {
+    if *TRACE_PATH {
+        TRACE_MAP.lock().unwrap().insert(c.pos, c);
+    }
+
+    if *TRACE {
+        println!("{:?}", c);
+    }
+}
+
+fn warp_trace(c: char, from: Cretin, to: Cretin) {
+    if *TRACE_PATH {
+        TRACE_MAP.lock().unwrap().insert(to.pos, to);
+    }
+    if *TRACE {
+        println!("Warp {} from {:?} to {:?}", c, from, to);
+    } 
 }
 
 impl Cretin {
@@ -165,21 +201,25 @@ impl Cretin {
             (Dir::Move(ds), Facing::Up) => {
                 for _ in 0..ds {
                     ret = map.dec_y(ret);
+                    trace(ret);
                 }
             }
             (Dir::Move(ds), Facing::Down) => {
                 for _ in 0..ds {
                     ret = map.inc_y(ret);
+                    trace(ret);
                 }
             }
             (Dir::Move(ds), Facing::Left) => {
                 for _ in 0..ds {
                     ret = map.dec_x(ret);
+                    trace(ret);
                 }
             }
             (Dir::Move(ds), Facing::Right) => {
                 for _ in 0..ds {
                     ret = map.inc_x(ret);
+                    trace(ret);
                 }
             }
 
@@ -206,7 +246,7 @@ fn main() {
         for x in 0..lines[y].len() {
             let s = lines[y].get(x..=x).unwrap();
             let p : Point = if *PART2 {
-                (x as i32 , y as i32 )
+                (x as i32 -1, y as i32 -1)
             } else {
                 (x as i32, y as i32)
             };
@@ -238,6 +278,8 @@ fn main() {
         }
     }
 
+    trace(cretin);
+
     if *DEBUG {
         dump(&map, &cretin);
     }
@@ -249,6 +291,10 @@ fn main() {
             dump(&map, &cretin);
         }
     }
+    if *TRACE_PATH {
+        dump_trace(&map, &TRACE_MAP.lock().unwrap());
+    }
+
     println!(
         "{}x1000 + {}x4 + {} = {}",
         cretin.pos.1 + 1,
@@ -258,12 +304,19 @@ fn main() {
     );
 }
 
+
 fn dump(map: &Tiles, cretin: &Cretin) {
+    dump_trace(map, &HashMap::from([(cretin.pos, cretin.clone())]));
+}
+
+fn dump_trace(map: &Tiles, cretins: &HashMap<Point, Cretin>) {
+
     for y in -2..=map.max.1 + 1 {
         for x in -2..map.max.0 + 1 {
             let p = (x, y);
 
-            if p == cretin.pos {
+            if cretins.contains_key(&p) {
+                let cretin = cretins[&p];
                 match cretin.face {
                     Facing::Up => print!("🔼"),
                     Facing::Down => print!("🔽"),
@@ -272,7 +325,7 @@ fn dump(map: &Tiles, cretin: &Cretin) {
                 }
             } else if map.tiles.contains_key(&p) {
                 match map.tiles[&p] {
-                    Tile::Open => print!("⬜"),
+                    Tile::Open => print!("🟫"),
                     Tile::Wall => print!("🟥"),
                     Tile::Null => print!("⬛"),
                     Tile::Warp(_,c) => print!("{}", c),
@@ -344,7 +397,7 @@ fn warp_5(c0: Cretin) -> Cretin {
 
 fn warp_6(c0: Cretin) -> Cretin {
     Cretin {
-        pos: (c0.pos.1 + 50, 149),
+        pos: (c0.pos.1 + 50, 49),
         face: Facing::Up,
     }
 }
