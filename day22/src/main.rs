@@ -9,7 +9,7 @@ lazy_static! {
     static ref RE: Regex = Regex::new(r"\d+|[RL]").unwrap();
     static ref DEBUG: bool = var("DEBUG").is_ok();
     static ref TRACE: bool = var("TRACE").is_ok();
-    static ref TRACE_PATH : bool = var("TRACE_PATH").is_ok();
+    static ref TRACE_PATH: bool = var("TRACE_PATH").is_ok();
     static ref PART2: bool = var("PART2").is_ok();
 }
 
@@ -75,12 +75,12 @@ impl Tiles {
         Tiles { tiles, max }
     }
 
-    fn inc_x(&self, c1: Cretin) -> Cretin {
-        let mut c2 = c1;
-        c2.pos.0 += 1;
+    fn wrap_steps(&self, c1: Cretin) -> Cretin {
+        let mut c2 = c1.step();
         loop {
-            if !*PART2 &&  c2.pos.0 > self.max.0 {
-                c2.pos.0 = 0;
+            if !*PART2 {
+                c2.pos.0 = c2.pos.0.rem_euclid(self.max.0+1);
+                c2.pos.1 = c2.pos.1.rem_euclid(self.max.1+1);
             }
             match self.tiles[&c2.pos] {
                 Tile::Wall => return c1,
@@ -89,90 +89,18 @@ impl Tiles {
                     if *PART2 {
                         panic!("Hit a null {:?}", c2);
                     }
-                    c2.pos.0 += 1;
-                },
-                Tile::Warp(warp, c) =>  {
+                    c2 = c2.step();
+                }
+                Tile::Warp(warp, c) => {
                     c2 = warp(c2);
                     warp_trace(c, c1, c2);
-                },
-            }
-        }
-    }
-
-    fn dec_x(&self, c1: Cretin) -> Cretin {
-        let mut c2 = c1;
-        c2.pos.0 -= 1;
-        loop {
-            if !*PART2 && c2.pos.0 < 0 {
-                c2.pos.0 = self.max.0;
-            }
-            match self.tiles[&c2.pos] {
-                Tile::Wall => return c1,
-                Tile::Open => return c2,
-                Tile::Null =>  {
-                    if *PART2 {
-                        panic!("Hit a null {:?}", c2);
-                    }
-                    c2.pos.0 -= 1;
-                },
-                Tile::Warp(warp, c) =>  {
-                    c2 = warp(c2);
-                    warp_trace(c, c1, c2);
-                },
-            }
-        }
-    }
-
-    fn inc_y(&self, c1: Cretin) -> Cretin {
-        let mut c2 = c1;
-        c2.pos.1 += 1;
-        loop {
-            if !*PART2 && c2.pos.1 > self.max.1 {
-                c2.pos.1 = 0;
-            }
-            match self.tiles[&c2.pos] {
-                Tile::Wall => return c1,
-                Tile::Open => return c2,
-                Tile::Null =>  {
-                    if *PART2 {
-                        panic!("Hit a null {:?}", c2);
-                    }
-                    c2.pos.1 += 1;
-                },
-                Tile::Warp(warp, c) =>  {
-                    c2 = warp(c2);
-                    warp_trace(c, c1, c2);
-                },
-            }
-        }
-    }
-
-    fn dec_y(&self, c1: Cretin) -> Cretin {
-        let mut c2 = c1;
-        c2.pos.1 -= 1;
-        loop {
-            if !*PART2 && c2.pos.1 < 0 {
-                c2.pos.1 = self.max.1;
-            }
-            match self.tiles[&c2.pos] {
-                Tile::Wall => return c1,
-                Tile::Open => return c2,
-                Tile::Null =>  {
-                    if *PART2 {
-                        panic!("Hit a null {:?}", c2);
-                    }
-                    c2.pos.1 -= 1;
-                },
-                Tile::Warp(warp, c) =>  {
-                    c2 = warp(c2);
-                    warp_trace(c, c1, c2);
-                },
+                }
             }
         }
     }
 }
 lazy_static! {
-    static ref TRACE_MAP : Mutex<HashMap<Point, Cretin>> = Mutex::new(HashMap::new());
+    static ref TRACE_MAP: Mutex<HashMap<Point, Cretin>> = Mutex::new(HashMap::new());
 }
 
 fn trace(c: Cretin) {
@@ -191,34 +119,30 @@ fn warp_trace(c: char, from: Cretin, to: Cretin) {
     }
     if *TRACE {
         println!("Warp {} from {:?} to {:?}", c, from, to);
-    } 
+    }
 }
 
 impl Cretin {
+    fn step(&self) -> Self {
+        let mut cn = *self;
+        match cn.face {
+            Facing::Right => cn.pos.0 += 1,
+            Facing::Down => cn.pos.1 += 1,
+            Facing::Left => cn.pos.0 -= 1,
+            Facing::Up => cn.pos.1 -= 1,
+        }
+        cn
+    }
+
     fn apply(&self, dir: Dir, map: &Tiles) -> Cretin {
         let mut ret = *self;
         match (dir, self.face) {
-            (Dir::Move(ds), Facing::Up) => {
-                for _ in 0..ds {
-                    ret = map.dec_y(ret);
-                    trace(ret);
-                }
-            }
-            (Dir::Move(ds), Facing::Down) => {
-                for _ in 0..ds {
-                    ret = map.inc_y(ret);
-                    trace(ret);
-                }
-            }
-            (Dir::Move(ds), Facing::Left) => {
-                for _ in 0..ds {
-                    ret = map.dec_x(ret);
-                    trace(ret);
-                }
-            }
+            (Dir::Move(ds), Facing::Up) |
+            (Dir::Move(ds), Facing::Down) |
+            (Dir::Move(ds), Facing::Left) |
             (Dir::Move(ds), Facing::Right) => {
                 for _ in 0..ds {
-                    ret = map.inc_x(ret);
+                    ret = map.wrap_steps(ret);
                     trace(ret);
                 }
             }
@@ -245,12 +169,12 @@ fn main() {
     while lines[y] != "" {
         for x in 0..lines[y].len() {
             let s = lines[y].get(x..=x).unwrap();
-            let p : Point = if *PART2 {
-                (x as i32 -1, y as i32 -1)
+            let p: Point = if *PART2 {
+                (x as i32 - 1, y as i32 - 1)
             } else {
                 (x as i32, y as i32)
             };
-            
+
             match s {
                 " " => tiles.insert(p, Tile::Null),
                 "." => tiles.insert(p, Tile::Open),
@@ -298,19 +222,17 @@ fn main() {
     println!(
         "{}x1000 + {}x4 + {} = {}",
         cretin.pos.1 + 1,
-        cretin.pos.0,
+        cretin.pos.0 + 1,
         cretin.face as i32,
         (cretin.pos.1 + 1) * 1000 + (cretin.pos.0 + 1) * 4 + cretin.face as i32
     );
 }
-
 
 fn dump(map: &Tiles, cretin: &Cretin) {
     dump_trace(map, &HashMap::from([(cretin.pos, cretin.clone())]));
 }
 
 fn dump_trace(map: &Tiles, cretins: &HashMap<Point, Cretin>) {
-
     for y in -2..=map.max.1 + 1 {
         for x in -2..map.max.0 + 1 {
             let p = (x, y);
@@ -328,7 +250,7 @@ fn dump_trace(map: &Tiles, cretins: &HashMap<Point, Cretin>) {
                     Tile::Open => print!("🟫"),
                     Tile::Wall => print!("🟥"),
                     Tile::Null => print!("⬛"),
-                    Tile::Warp(_,c) => print!("{}", c),
+                    Tile::Warp(_, c) => print!("{}", c),
                 }
             } else {
                 print!("💢")
@@ -341,147 +263,186 @@ fn dump_trace(map: &Tiles, cretins: &HashMap<Point, Cretin>) {
 
 lazy_static! {
     static ref WARPS: HashMap<String, Tile> = HashMap::from([
-        (String::from("1"), Tile::Warp(warp_1, '①')),
-        (String::from("2"), Tile::Warp(warp_2, '②')),
-        (String::from("3"), Tile::Warp(warp_3, '③')),
-        (String::from("4"), Tile::Warp(warp_4, '④')),
-        (String::from("5"), Tile::Warp(warp_5, '⑤')),
-        (String::from("6"), Tile::Warp(warp_6, '⑥')),
-        (String::from("7"), Tile::Warp(warp_7, '⑦')),
-        (String::from("8"), Tile::Warp(warp_8, '⑧')),
-        (String::from("9"), Tile::Warp(warp_9, '⑨')),
-        (String::from("A"), Tile::Warp(warp_a, '🅰')),
-        (String::from("B"), Tile::Warp(warp_b, '🅱')),
-        (String::from("C"), Tile::Warp(warp_c, '🅲')),
-        (String::from("D"), Tile::Warp(warp_d, '🅳')),
+        (String::from("1"), Tile::Warp(warp_1_d, '①')),
+        (String::from("2"), Tile::Warp(warp_2_4, '②')),
+        (String::from("3"), Tile::Warp(warp_3_h, '③')),
+        (String::from("4"), Tile::Warp(warp_4_2, '④')),
+        (String::from("5"), Tile::Warp(warp_5_c, '⑤')),
+        (String::from("6"), Tile::Warp(warp_6_b, '⑥')),
+        (String::from("7"), Tile::Warp(warp_7_8, '⑦')),
+        (String::from("8"), Tile::Warp(warp_8_7, '⑧')),
+        (String::from("9"), Tile::Warp(warp_9_a, '⑨')),
+        (String::from("A"), Tile::Warp(warp_a_9, '🅰')),
+        (String::from("B"), Tile::Warp(warp_b_6, '🅱')),
+        (String::from("C"), Tile::Warp(warp_c_5, '🅲')),
+        (String::from("D"), Tile::Warp(warp_d_1, '🅳')),
         (String::from("E"), Tile::Warp(warp_e, '🅴')),
         (String::from("F"), Tile::Warp(warp_f, '🅵')),
         (String::from("G"), Tile::Warp(warp_g, '🅶')),
-        (String::from("H"), Tile::Warp(warp_h, '🅷'))
+        (String::from("H"), Tile::Warp(warp_h_3, '🅷'))
     ]);
 }
-fn warp_1(c0: Cretin) -> Cretin {
+
+fn warp_1_d(cn: Cretin) -> Cretin {
+    assert!(cn.face == Facing::Left);
+    let x = 50 + (cn.pos.1 % 50);
+    let y = 0;
     Cretin {
-        pos: (c0.pos.1 - 100, 0),
+        pos: (x, y),
         face: Facing::Down,
     }
 }
 
-fn warp_2(c0: Cretin) -> Cretin {
+fn warp_2_4(cn: Cretin) -> Cretin {
+    assert!(cn.face == Facing::Right);
+    let x = 50 + (cn.pos.1 % 50);
+    let y = 149;
     Cretin {
-        pos: (c0.pos.1 - 100, 149),
+        pos: (x, y),
         face: Facing::Up,
     }
 }
 
-fn warp_3(c0: Cretin) -> Cretin {
+fn warp_3_h(cn: Cretin) -> Cretin {
+    assert!(cn.face == Facing::Down);
+    let x = 100 + (cn.pos.0 % 50);
+    let y = 0;
     Cretin {
-        pos: (c0.pos.0 + 100, 0),
+        pos: (x, y),
         face: Facing::Down,
     }
 }
 
-fn warp_4(c0: Cretin) -> Cretin {
+fn warp_4_2(cn: Cretin) -> Cretin {
+    assert!(cn.face == Facing::Down);
+    let x = 49;
+    let y = 150 + (cn.pos.0 % 50);
     Cretin {
-        pos: (49, c0.pos.0 + 100),
+        pos: (x, y),
         face: Facing::Left,
     }
 }
 
-fn warp_5(c0: Cretin) -> Cretin {
+fn warp_5_c(cn: Cretin) -> Cretin {
+    assert!(cn.face == Facing::Right);
+    let x = 149;
+    let y = 0 + (cn.pos.1 % 50);
     Cretin {
-        pos: (149, c0.pos.1 - 100),
+        pos: (x, y),
         face: Facing::Left,
     }
 }
 
-fn warp_6(c0: Cretin) -> Cretin {
+fn warp_6_b(cn: Cretin) -> Cretin {
+    assert!(cn.face == Facing::Right);
+    let x = 100 + (cn.pos.1 % 50);
+    let y = 49;
     Cretin {
-        pos: (c0.pos.1 + 50, 49),
+        pos: (x, y),
         face: Facing::Up,
     }
 }
 
-fn warp_7(c0: Cretin) -> Cretin { //checked
+fn warp_7_8(cn: Cretin) -> Cretin {
+    assert!(cn.face == Facing::Left);
+    let x = 0 + (cn.pos.1 % 50);
+    let y = 100;
     Cretin {
-        pos: (c0.pos.1 - 50, 100),
+        pos: (x, y),
         face: Facing::Down,
     }
 }
 
-fn warp_8(c0: Cretin) -> Cretin {
+fn warp_8_7(cn: Cretin) -> Cretin {
+    assert!(cn.face == Facing::Up);
+    let x = 50;
+    let y = 50 + (cn.pos.0 % 50);
     Cretin {
-        pos: (50, c0.pos.0 + 50),
+        pos: (x, y),
         face: Facing::Right,
     }
 }
 
-fn warp_9(c0: Cretin) -> Cretin {
+fn warp_9_a(cn: Cretin) -> Cretin {
+    assert!(cn.face == Facing::Left);
+    let x = 50;
+    let y = 0 + (cn.pos.1 % 50);
     Cretin {
-        pos: (50, c0.pos.1 - 100),
+        pos: (x, y),
         face: Facing::Right,
     }
 }
 
-
-fn warp_a(c0: Cretin) -> Cretin {
+fn warp_a_9(cn: Cretin) -> Cretin {
+    assert!(cn.face == Facing::Left);
+    let x = 0;
+    let y = 100 + (cn.pos.1 % 50);
     Cretin {
-        pos: (0, c0.pos.1 + 100),
+        pos: (x, y),
         face: Facing::Right,
     }
 }
 
-
-fn warp_b(c0: Cretin) -> Cretin {
+fn warp_b_6(cn: Cretin) -> Cretin {
+    assert!(cn.face == Facing::Down);
+    let x = 99;
+    let y = 50 + (cn.pos.1 % 50);
     Cretin {
-        pos: (99, c0.pos.0 - 50),
+        pos: (x, y),
         face: Facing::Left,
     }
 }
 
-fn warp_c(c0: Cretin) -> Cretin {
+fn warp_c_5(cn: Cretin) -> Cretin {
+    assert!(cn.face == Facing::Right);
+    let x = 99;
+    let y = 100 + (cn.pos.1 % 50);
     Cretin {
-        pos: (99, c0.pos.1 + 100),
+        pos: (x, y),
         face: Facing::Left,
     }
 }
 
-
-fn warp_d(c0: Cretin) -> Cretin {
+fn warp_d_1(cn: Cretin) -> Cretin {
+    assert!(cn.face == Facing::Up);
+    let x = 0;
+    let y = 150 + (cn.pos.0 % 50);
     Cretin {
-        pos: (0, c0.pos.0 + 100),
+        pos: (x, y),
         face: Facing::Right,
     }
 }
 
-fn warp_h(c0: Cretin) -> Cretin {
+fn warp_h_3(cn: Cretin) -> Cretin {
+    assert!(cn.face == Facing::Up);
+    let x = 0 + (cn.pos.0 % 50);
+    let y = 199;
     Cretin {
-        pos: (c0.pos.0 - 100, 149),
+        pos: (x, y),
         face: Facing::Up,
     }
 }
 
-fn warp_e(c0: Cretin) -> Cretin {
-    if c0.face == Facing::Down {
-        warp_b(c0)
+fn warp_e(cn: Cretin) -> Cretin {
+    if cn.face == Facing::Down {
+        warp_b_6(cn)
     } else {
-        warp_6(c0)
+        warp_6_b(cn)
     }
 }
 
-fn warp_f(c0: Cretin) -> Cretin {
-    if c0.face == Facing::Up {
-        warp_8(c0)
+fn warp_f(cn: Cretin) -> Cretin {
+    if cn.face == Facing::Up {
+        warp_8_7(cn)
     } else {
-        warp_7(c0)
+        warp_7_8(cn)
     }
 }
 
-
-fn warp_g(c0: Cretin) -> Cretin {
-    if c0.face == Facing::Right {
-        warp_2(c0)
+fn warp_g(cn: Cretin) -> Cretin {
+    if cn.face == Facing::Right {
+        warp_2_4(cn)
     } else {
-        warp_4(c0)
+        warp_4_2(cn)
     }
 }
