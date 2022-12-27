@@ -79,11 +79,14 @@ impl Tiles {
         let mut c2 = c1.step();
         loop {
             if !*PART2 {
-                c2.pos.0 = c2.pos.0.rem_euclid(self.max.0+1);
-                c2.pos.1 = c2.pos.1.rem_euclid(self.max.1+1);
+                c2.pos.0 = c2.pos.0.rem_euclid(self.max.0 + 1);
+                c2.pos.1 = c2.pos.1.rem_euclid(self.max.1 + 1);
             }
             match self.tiles[&c2.pos] {
-                Tile::Wall => return c1,
+                Tile::Wall => {
+                    wall_trace(c2);
+                    return c1;
+                }
                 Tile::Open => return c2,
                 Tile::Null => {
                     if *PART2 {
@@ -92,7 +95,7 @@ impl Tiles {
                     c2 = c2.step();
                 }
                 Tile::Warp(warp, c) => {
-                    c2 = warp(c2);
+                    c2 = warp(c2.unstep());
                     warp_trace(c, c1, c2);
                 }
             }
@@ -122,6 +125,12 @@ fn warp_trace(c: char, from: Cretin, to: Cretin) {
     }
 }
 
+fn wall_trace(cn: Cretin) {
+    if *TRACE {
+        println!("Hit wall at {:?}", cn);
+    }
+}
+
 impl Cretin {
     fn step(&self) -> Self {
         let mut cn = *self;
@@ -134,13 +143,24 @@ impl Cretin {
         cn
     }
 
+    fn unstep(&self) -> Self {
+        let mut cn = *self;
+        match cn.face {
+            Facing::Right => cn.pos.0 -= 1,
+            Facing::Down => cn.pos.1 -= 1,
+            Facing::Left => cn.pos.0 += 1,
+            Facing::Up => cn.pos.1 += 1,
+        }
+        cn
+    }
+
     fn apply(&self, dir: Dir, map: &Tiles) -> Cretin {
         let mut ret = *self;
         match (dir, self.face) {
-            (Dir::Move(ds), Facing::Up) |
-            (Dir::Move(ds), Facing::Down) |
-            (Dir::Move(ds), Facing::Left) |
-            (Dir::Move(ds), Facing::Right) => {
+            (Dir::Move(ds), Facing::Up)
+            | (Dir::Move(ds), Facing::Down)
+            | (Dir::Move(ds), Facing::Left)
+            | (Dir::Move(ds), Facing::Right) => {
                 for _ in 0..ds {
                     ret = map.wrap_steps(ret);
                     trace(ret);
@@ -281,6 +301,37 @@ lazy_static! {
         (String::from("G"), Tile::Warp(warp_g, '🅶')),
         (String::from("H"), Tile::Warp(warp_h_3, '🅷'))
     ]);
+}
+
+struct _Warp {
+    enter_face: Facing,
+    exit_face: Facing,
+    enter_start: Point,
+    exit_start: Point,
+    size: i32,
+}
+
+impl _Warp {
+    fn _warp(&self, cn: Cretin) -> Cretin {
+        assert_eq!(cn.face, self.enter_face);
+        assert!(cn.pos.0 >= self.enter_start.0);
+        assert!(cn.pos.0 < self.enter_start.0 + self.size);
+        assert!(cn.pos.1 >= self.enter_start.1);
+        assert!(cn.pos.1 <= self.enter_start.1 + self.size);
+
+        let ds = match self.enter_face {
+            Facing::Right | Facing::Left => cn.pos.1 % self.size,
+            Facing::Up | Facing::Down => cn.pos.0 % self.size,
+        };
+
+        let pos = match self.exit_face {
+            Facing::Right | Facing::Left => (self.exit_start.0, self.exit_start.1 + ds),
+            Facing::Up | Facing::Down => (self.exit_start.0 + ds, self.exit_start.1),
+        };
+
+        let face = self.exit_face;
+        Cretin { pos, face }
+    }
 }
 
 fn warp_1_d(cn: Cretin) -> Cretin {
