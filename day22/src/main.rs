@@ -1,6 +1,6 @@
 #[macro_use]
 extern crate lazy_static;
-use std::{collections::HashMap, env::var, fs::read_to_string};
+use std::{collections::HashMap, env::var, fs::read_to_string, sync::Mutex};
 
 use regex::Regex;
 
@@ -8,7 +8,11 @@ lazy_static! {
     static ref INPUT: String = read_to_string(var("INPUT").unwrap()).unwrap();
     static ref RE: Regex = Regex::new(r"\d+|[RL]").unwrap();
     static ref DEBUG: bool = var("DEBUG").is_ok();
+    static ref TRACE: bool = var("TRACE").is_ok();
+    static ref TRACE_PATH: bool = var("TRACE_PATH").is_ok();
     static ref PART2: bool = var("PART2").is_ok();
+    static ref START: String = var("START").unwrap_or_default();
+    static ref INSTR: String = var("INSTR").unwrap_or_default();
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,6 +28,17 @@ enum Facing {
     Down = 1,
     Left = 2,
     Up = 3,
+}
+
+impl Facing {
+    fn reverse(&self) -> Self {
+        match self {
+            Facing::Right => Facing::Left,
+            Facing::Down => Facing::Up,
+            Facing::Left => Facing::Right,
+            Facing::Up => Facing::Down,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -52,7 +67,6 @@ struct Cretin {
 
 struct Tiles {
     tiles: HashMap<Point, Tile>,
-    xfer: HashMap<Cretin, Cretin>,
     max: Point,
 }
 
@@ -62,292 +76,108 @@ impl Tiles {
             *tiles.iter().map(|((x, _), _)| x).max().unwrap() as i32,
             *tiles.iter().map(|((_, y), _)| y).max().unwrap() as i32,
         );
-        for x in 0..=max.0 {
-            for y in 0..=max.1 {
+        for x in -1..=(max.0 + 1) {
+            for y in -1..=(max.1 + 1) {
                 if !tiles.contains_key(&(x, y)) {
                     tiles.insert((x, y), Tile::Null);
                 }
             }
         }
-        let mut xfer = HashMap::new();
 
-        if *PART2 {
-            //  x:  50- 99 y:   -1 Up DONE1
-            for x in 50..=99 {
-                xfer.insert(
-                    Cretin {
-                        pos: (x, -1),
-                        face: Facing::Up,
-                    },
-                    Cretin {
-                        pos: (0, 49 + x),
-                        face: Facing::Right,
-                    },
-                );
-            }
-
-            //  x: 100-149 y:   -1 Up DONE1
-            for x in 100..=149 {
-                xfer.insert(
-                    Cretin {
-                        pos: (x, -1),
-                        face: Facing::Up,
-                    },
-                    Cretin {
-                        pos: (x - 100, 199),
-                        face: Facing::Up,
-                    },
-                );
-            }
-            //  x:      49 y:   0- 49 Left DONE1
-            for y in 0..=49 {
-                xfer.insert(
-                    Cretin {
-                        pos: (49, y),
-                        face: Facing::Left,
-                    },
-                    Cretin {
-                        pos: (0, 100 + y),
-                        face: Facing::Right,
-                    },
-                );
-            }
-            //  x:     149 y:   0- 49 Right DONE1
-            for y in 0..=49 {
-                xfer.insert(
-                    Cretin {
-                        pos: (149, y),
-                        face: Facing::Right,
-                    },
-                    Cretin {
-                        pos: (99, 100 + y),
-                        face: Facing::Left,
-                    },
-                );
-            }
-            //  x: 100-149 y:      49 Down DONE
-            for x in 100..=149 {
-                xfer.insert(
-                    Cretin {
-                        pos: (x, 49),
-                        face: Facing::Down,
-                    },
-                    Cretin {
-                        pos: (100, 50 + x - 100),
-                        face: Facing::Left,
-                    },
-                );
-            }
-            //  x:      49 y:  50- 99 Left
-            for y in 50..=99 {
-                xfer.insert(
-                    Cretin {
-                        pos: (49, y),
-                        face: Facing::Left,
-                    },
-                    Cretin {
-                        pos: (999, 999),
-                        face: Facing::Up,
-                    },
-                );
-            }
-
-            //  x:     100 y:  50- 99 Right
-            for y in 50..=99 {
-                xfer.insert(
-                    Cretin {
-                        pos: (100, y),
-                        face: Facing::Right,
-                    },
-                    Cretin {
-                        pos: (999, 999),
-                        face: Facing::Up,
-                    },
-                );
-            }
-
-            //  x:   0- 49 y:      99 Up
-            for x in 0..=49 {
-                xfer.insert(
-                    Cretin {
-                        pos: (x, 99),
-                        face: Facing::Up,
-                    },
-                    Cretin {
-                        pos: (999, 999),
-                        face: Facing::Up,
-                    },
-                );
-            }
-
-            //  x:      -1 y: 100-149 Left
-            for y in 100..=149 {
-                xfer.insert(
-                    Cretin {
-                        pos: (-1, y),
-                        face: Facing::Left,
-                    },
-                    Cretin {
-                        pos: (999, 999),
-                        face: Facing::Up,
-                    },
-                );
-            }
-            //  x:     100 y: 100-149 Right
-            for y in 100..=149 {
-                xfer.insert(
-                    Cretin {
-                        pos: (100, y),
-                        face: Facing::Right,
-                    },
-                    Cretin {
-                        pos: (999, 999),
-                        face: Facing::Up,
-                    },
-                );
-            }
-
-            //  x:  50- 99 y:     150 Down
-            for x in 50..=99 {
-                xfer.insert(
-                    Cretin {
-                        pos: (x, 150),
-                        face: Facing::Down,
-                    },
-                    Cretin {
-                        pos: (999, 999),
-                        face: Facing::Up,
-                    },
-                );
-            }
-
-            //  x:      -1 y: 150-199 Left
-            for y in 150..=199 {
-                xfer.insert(
-                    Cretin {
-                        pos: (-1, y),
-                        face: Facing::Left,
-                    },
-                    Cretin {
-                        pos: (999, 999),
-                        face: Facing::Up,
-                    },
-                );
-            }
-            //  x:      50 y: 150-199 Right
-            for y in 150..=199 {
-                xfer.insert(
-                    Cretin {
-                        pos: (50, y),
-                        face: Facing::Right,
-                    },
-                    Cretin {
-                        pos: (999, 999),
-                        face: Facing::Up,
-                    },
-                );
-            }
-            //  x:   0- 49 y: 200 Down
-            for x in 0..=49 {
-                xfer.insert(
-                    Cretin {
-                        pos: (x, 200),
-                        face: Facing::Down,
-                    },
-                    Cretin {
-                        pos: (999, 999),
-                        face: Facing::Up,
-                    },
-                );
-            }
-        }
-
-        Tiles { tiles, xfer, max }
+        Tiles { tiles, max }
     }
 
-    fn inc_x(&self, c1: Cretin) -> Cretin {
-        let mut c2 = c1;
-        c2.pos.0 += 1;
-        loop {
-            if c2.pos.0 > self.max.0 {
-                c2.pos.0 = 0;
+    fn wrap_steps(&self, c1: Cretin) -> Cretin {
+        let mut c2 = c1.step();
+        'null_skip: loop {
+            if !*PART2 {
+                c2.pos.0 = c2.pos.0.rem_euclid(self.max.0 + 1);
+                c2.pos.1 = c2.pos.1.rem_euclid(self.max.1 + 1);
             }
             match self.tiles[&c2.pos] {
-                Tile::Wall => return c1,
+                Tile::Wall => {
+                    wall_trace(c2);
+                    return c1;
+                }
                 Tile::Open => return c2,
-                Tile::Null => c2.pos.0 += 1,
-            }
-        }
-    }
-
-    fn dec_x(&self, c1: Cretin) -> Cretin {
-        let mut c2 = c1;
-        c2.pos.0 -= 1;
-        loop {
-            if c2.pos.0 < 0 {
-                c2.pos.0 = self.max.0;
-            }
-            match self.tiles[&c2.pos] {
-                Tile::Wall => return c1,
-                Tile::Open => return c2,
-                Tile::Null => c2.pos.0 -= 1,
-            }
-        }
-    }
-
-    fn inc_y(&self, c1: Cretin) -> Cretin {
-        let mut c2 = c1;
-        c2.pos.1 += 1;
-        loop {
-            if c2.pos.1 > self.max.1 {
-                c2.pos.1 = 0;
-            }
-            match self.tiles[&c2.pos] {
-                Tile::Wall => return c1,
-                Tile::Open => return c2,
-                Tile::Null => c2.pos.1 += 1,
-            }
-        }
-    }
-
-    fn dec_y(&self, c1: Cretin) -> Cretin {
-        let mut c2 = c1;
-        c2.pos.1 -= 1;
-        loop {
-            if c2.pos.1 < 0 {
-                c2.pos.1 = self.max.1;
-            }
-            match self.tiles[&c2.pos] {
-                Tile::Wall => return c1,
-                Tile::Open => return c2,
-                Tile::Null => c2.pos.1 -= 1,
+                Tile::Null => {
+                    if *PART2 {
+                        let uncn = c2.unstep();
+                        for warp in &*WARP_INPUT {
+                            if let Some(wpcn) = warp.warp_if_contained(uncn) {
+                                warp_trace(warp.label, uncn, wpcn);
+                                c2 = wpcn;
+                                continue 'null_skip;
+                            }
+                        }
+                        panic!("Did not find warp.");
+                    } else {
+                        c2 = c2.step();
+                    }
+                }
             }
         }
     }
 }
+lazy_static! {
+    static ref TRACE_MAP: Mutex<HashMap<Point, Cretin>> = Mutex::new(HashMap::new());
+}
+
+fn trace(c: Cretin) {
+    if *TRACE_PATH {
+        TRACE_MAP.lock().unwrap().insert(c.pos, c);
+    }
+
+    if *TRACE {
+        println!("{:?}", c);
+    }
+}
+
+fn warp_trace(c: char, from: Cretin, to: Cretin) {
+    if *TRACE {
+        println!("Warp {} from {:?} to {:?}", c, from, to);
+    }
+}
+
+fn wall_trace(cn: Cretin) {
+    if *TRACE {
+        println!("Hit wall at {:?}", cn);
+    }
+}
 
 impl Cretin {
+    fn step(&self) -> Self {
+        let mut cn = *self;
+        match cn.face {
+            Facing::Right => cn.pos.0 += 1,
+            Facing::Down => cn.pos.1 += 1,
+            Facing::Left => cn.pos.0 -= 1,
+            Facing::Up => cn.pos.1 -= 1,
+        }
+        cn
+    }
+
+    fn unstep(&self) -> Self {
+        let mut cn = *self;
+        match cn.face {
+            Facing::Right => cn.pos.0 -= 1,
+            Facing::Down => cn.pos.1 -= 1,
+            Facing::Left => cn.pos.0 += 1,
+            Facing::Up => cn.pos.1 += 1,
+        }
+        cn
+    }
+
     fn apply(&self, dir: Dir, map: &Tiles) -> Cretin {
         let mut ret = *self;
         match (dir, self.face) {
-            (Dir::Move(ds), Facing::Up) => {
+            (Dir::Move(ds), Facing::Up)
+            | (Dir::Move(ds), Facing::Down)
+            | (Dir::Move(ds), Facing::Left)
+            | (Dir::Move(ds), Facing::Right) => {
                 for _ in 0..ds {
-                    ret = map.dec_y(ret);
-                }
-            }
-            (Dir::Move(ds), Facing::Down) => {
-                for _ in 0..ds {
-                    ret = map.inc_y(ret);
-                }
-            }
-            (Dir::Move(ds), Facing::Left) => {
-                for _ in 0..ds {
-                    ret = map.dec_x(ret);
-                }
-            }
-            (Dir::Move(ds), Facing::Right) => {
-                for _ in 0..ds {
-                    ret = map.inc_x(ret);
+                    ret = map.wrap_steps(ret);
+                    trace(ret);
                 }
             }
 
@@ -361,6 +191,7 @@ impl Cretin {
             (Dir::Right, Facing::Left) => ret.face = Facing::Up,
             (Dir::Right, Facing::Right) => ret.face = Facing::Down,
         };
+        trace(ret);
         ret
     }
 }
@@ -374,19 +205,26 @@ fn main() {
         for x in 0..lines[y].len() {
             let s = lines[y].get(x..=x).unwrap();
             let p: Point = (x as i32, y as i32);
+
             match s {
                 " " => tiles.insert(p, Tile::Null),
                 "." => tiles.insert(p, Tile::Open),
                 "#" => tiles.insert(p, Tile::Wall),
-                _ => panic!("Bad input"),
+                _ => panic!("bad input ({}, {})", x, y),
             };
         }
         y += 1
     }
 
     y += 1;
-    for dir in RE.find_iter(lines[y]) {
-        dirs.push(Dir::from(dir.as_str()));
+    if INSTR.is_empty() {
+        for dir in RE.find_iter(lines[y]) {
+            dirs.push(Dir::from(dir.as_str()));
+        }
+    } else {
+        for dir in RE.find_iter(&*INSTR) {
+            dirs.push(Dir::from(dir.as_str()));
+        }
     }
 
     let map = Tiles::new(tiles);
@@ -401,6 +239,14 @@ fn main() {
         }
     }
 
+    if !START.is_empty() {
+        let ps = START.split(",").collect::<Vec<&str>>();
+        cretin.pos.0 = i32::from_str_radix(ps[0], 10).unwrap();
+        cretin.pos.1 = i32::from_str_radix(ps[1], 10).unwrap();
+    }
+
+    trace(cretin);
+
     if *DEBUG {
         dump(&map, &cretin);
     }
@@ -412,59 +258,30 @@ fn main() {
             dump(&map, &cretin);
         }
     }
+    if *TRACE_PATH {
+        dump_trace(&map, &TRACE_MAP.lock().unwrap());
+    }
+
     println!(
         "{}x1000 + {}x4 + {} = {}",
         cretin.pos.1 + 1,
-        cretin.pos.0,
+        cretin.pos.0 + 1,
         cretin.face as i32,
         (cretin.pos.1 + 1) * 1000 + (cretin.pos.0 + 1) * 4 + cretin.face as i32
     );
 }
 
 fn dump(map: &Tiles, cretin: &Cretin) {
-    let mut flipped = HashMap::new();
+    dump_trace(map, &HashMap::from([(cretin.pos, cretin.clone())]));
+}
 
-    for (k, v) in map.xfer.iter() {
-        flipped.insert(v.clone(), k.clone());
-    }
-
-    for y in -1..=map.max.1 + 1 {
-        for x in -1..map.max.0 + 1 {
+fn dump_trace(map: &Tiles, cretins: &HashMap<Point, Cretin>) {
+    for y in 0..=map.max.1 {
+        for x in 0..=map.max.0 {
             let p = (x, y);
-            let xc = [
-                Cretin {
-                    pos: p,
-                    face: Facing::Down,
-                },
-                Cretin {
-                    pos: p,
-                    face: Facing::Right,
-                },
-                Cretin {
-                    pos: p,
-                    face: Facing::Up,
-                },
-                Cretin {
-                    pos: p,
-                    face: Facing::Left,
-                },
-            ];
 
-            if flipped.contains_key(&xc[0]) {
-                print!("🔽");
-            } else if flipped.contains_key(&xc[0]) {
-                print!("⏩");
-            } else if flipped.contains_key(&xc[0]) {
-                print!("🔼");
-            } else if flipped.contains_key(&xc[0]) {
-                print!("⏪");
-            } else if map.xfer.contains_key(&xc[0])
-                || map.xfer.contains_key(&xc[1])
-                || map.xfer.contains_key(&xc[2])
-                || map.xfer.contains_key(&xc[3])
-            {
-                print!("🎄");
-            } else if p == cretin.pos {
+            if cretins.contains_key(&p) {
+                let cretin = cretins[&p];
                 match cretin.face {
                     Facing::Up => print!("🔼"),
                     Facing::Down => print!("🔽"),
@@ -473,7 +290,7 @@ fn dump(map: &Tiles, cretin: &Cretin) {
                 }
             } else if map.tiles.contains_key(&p) {
                 match map.tiles[&p] {
-                    Tile::Open => print!("⬜"),
+                    Tile::Open => print!("🟫"),
                     Tile::Wall => print!("🟥"),
                     Tile::Null => print!("⬛"),
                 }
@@ -484,4 +301,126 @@ fn dump(map: &Tiles, cretin: &Cretin) {
         println!("");
     }
     println!("");
+}
+
+lazy_static! {
+    static ref WARP_INPUT: Vec<Warp> = {
+        let e1 = Edge::new((0, 150), Facing::Left, 50);
+        let e2 = Edge::new((49, 150), Facing::Right, 50);
+        let e3 = Edge::new((0, 199), Facing::Down, 50);
+        let e4 = Edge::new((50, 149), Facing::Down, 50);
+        let e5 = Edge::new((99, 100), Facing::Right, 50);
+        let e6 = Edge::new((99, 50), Facing::Right, 50);
+        let e7 = Edge::new((50, 50), Facing::Left, 50);
+        let e8 = Edge::new((0, 100), Facing::Up, 50);
+        let e9 = Edge::new((0, 100), Facing::Left, 50);
+        let ea = Edge::new((50, 0), Facing::Left, 50);
+        let eb = Edge::new((100, 49), Facing::Down, 50);
+        let ec = Edge::new((149, 0), Facing::Right, 50);
+        let ed = Edge::new((50, 0), Facing::Up, 50);
+        let eh = Edge::new((100, 0), Facing::Up, 50);
+
+        vec![
+            Warp::new(e1, ed, '①'),
+            Warp::new(e2, e4, '②'),
+            Warp::new(e3, eh, '③'),
+            Warp::new(e4, e2, '④'),
+            Warp::new(e5, ec, '⑤'),
+            Warp::new(e6, eb, '⑥'),
+            Warp::new(e7, e8, '⑦'),
+            Warp::new(e8, e7, '⑧'),
+            Warp::new(e9, ea, '⑨'),
+            Warp::new(ea, e9, '🅰'),
+            Warp::new(eb, e6, '🅱'),
+            Warp::new(ec, e5, '🅲'),
+            Warp::new(ed, e1, '🅳'),
+            Warp::new(eh, e3, '🅷'),
+        ]
+    };
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Edge {
+    origin: Point,
+    face: Facing, // out from center
+    size: i32,
+}
+
+impl Edge {
+    fn new(origin: Point, face: Facing, size: i32) -> Self {
+        Edge { origin, face, size }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Warp {
+    enter: Edge,
+    exit: Edge,
+    label: char,
+}
+
+impl Warp {
+    fn new(enter: Edge, exit: Edge, label: char) -> Self {
+        assert_eq!(enter.size, exit.size);
+        Warp { enter, exit, label }
+    }
+
+    fn warp_if_contained(&self, cn: Cretin) -> Option<Cretin> {
+        let face = self.enter.face;
+        let origin = self.enter.origin;
+        let size = self.enter.size;
+
+        if cn.face != face {
+            return None;
+        }
+
+        match cn.face {
+            Facing::Right | Facing::Left => {
+                if !(origin.1..(origin.1 + size)).contains(&cn.pos.1) || !(origin.0 == cn.pos.0) {
+                    return None;
+                }
+            }
+            Facing::Up | Facing::Down => {
+                if !(origin.0..(origin.0 + size)).contains(&cn.pos.0) || !(origin.1 == cn.pos.1) {
+                    return None;
+                }
+            }
+        }
+
+        let ds = match self.enter.face {
+            Facing::Right | Facing::Left => cn.pos.1 % self.enter.size,
+            Facing::Up | Facing::Down => cn.pos.0 % self.enter.size,
+        };
+
+        let pos = match (self.enter.face, self.exit.face) {
+            (Facing::Right, Facing::Left)
+            | (Facing::Left, Facing::Right)
+            | (Facing::Up, Facing::Left)
+            | (Facing::Down, Facing::Right) => (self.exit.origin.0, self.exit.origin.1 + ds),
+
+            (Facing::Up, Facing::Down)
+            | (Facing::Down, Facing::Up)
+            | (Facing::Right, Facing::Down)
+            | (Facing::Left, Facing::Up) => (self.exit.origin.0 + ds, self.exit.origin.1),
+
+            (Facing::Right, Facing::Right)
+            | (Facing::Left, Facing::Left)
+            | (Facing::Up, Facing::Right)
+            | (Facing::Down, Facing::Left) => (
+                self.exit.origin.0,
+                self.exit.origin.1 + self.exit.size - ds - 1,
+            ),
+
+            (Facing::Right, Facing::Up)
+            | (Facing::Left, Facing::Down)
+            | (Facing::Down, Facing::Down)
+            | (Facing::Up, Facing::Up) => (
+                self.exit.origin.0 + self.exit.size - ds - 1,
+                self.exit.origin.1,
+            ),
+        };
+
+        let face = self.exit.face.reverse();
+        Some(Cretin { pos, face })
+    }
 }
