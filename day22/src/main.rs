@@ -400,8 +400,8 @@ impl Warp {
 
             (Facing::Up, Facing::Down)
             | (Facing::Down, Facing::Up)
-            | (Facing::Right, Facing::Up)
-            | (Facing::Left, Facing::Down) => (self.exit.origin.0 + ds, self.exit.origin.1),
+            | (Facing::Right, Facing::Down)
+            | (Facing::Left, Facing::Up) => (self.exit.origin.0 + ds, self.exit.origin.1),
 
             (Facing::Right, Facing::Right)
             | (Facing::Left, Facing::Left)
@@ -411,8 +411,8 @@ impl Warp {
                 self.exit.origin.1 + self.exit.size - ds - 1,
             ),
 
-            (Facing::Right, Facing::Down)
-            | (Facing::Left, Facing::Up)
+            (Facing::Right, Facing::Up)
+            | (Facing::Left, Facing::Down)
             | (Facing::Down, Facing::Down)
             | (Facing::Up, Facing::Up) => (
                 self.exit.origin.0 + self.exit.size - ds - 1,
