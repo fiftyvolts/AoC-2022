@@ -19,7 +19,7 @@ lazy_static! {
 
 #[derive(Debug, Clone)]
 struct Valve<'a> {
-    name: String,
+    name: &'a str,
     rate: i32,
     adj: Vec<&'a str>,
 }
@@ -36,18 +36,18 @@ impl<'a> From<&'a str> for Valve<'a> {
 }
 
 fn main() {
-    let mut cave: HashMap<String, Box<Valve>> = HashMap::new();
+    let mut cave: HashMap<&str, Box<Valve>> = HashMap::new();
     for line in INPUT.lines() {
         let valve = Box::new(Valve::from(line));
-        cave.insert(valve.name.clone(), valve);
+        cave.insert(valve.name, valve);
     }
 
     let mut travel: HashMap<(&str, &str), i32> = HashMap::new();
     let valve_names = cave.keys().collect::<Vec<_>>();
     for i in 0..valve_names.len() {
         for j in 0..valve_names.len() {
-            let start = valve_names[i].as_str();
-            let end = valve_names[j].as_str();
+            let start = valve_names[i];
+            let end = valve_names[j];
             if i == j {
                 travel.insert((start, start), 0);
                 continue;
@@ -74,10 +74,10 @@ fn main() {
     all_possible_paths(&cave, &travel);
 }
 
-fn all_possible_paths(cave: &HashMap<String, Box<Valve>>, travel: &HashMap<(&str, &str), i32>) {
+fn all_possible_paths(cave: &HashMap<&str, Box<Valve>>, travel: &HashMap<(&str, &str), i32>) {
     let valve_names = cave
         .keys()
-        .filter(|k| k != &"AA" && cave[*k].rate > 0)
+        .filter(|k| **k != "AA" && cave[*k].rate > 0)
         .cloned()
         .collect::<BTreeSet<_>>();
 
@@ -93,13 +93,13 @@ fn all_possible_paths(cave: &HashMap<String, Box<Valve>>, travel: &HashMap<(&str
     );
 }
 
-fn search_pair(
-    cave: &HashMap<String, Box<Valve>>,
+fn search_pair<'a>(
+    cave: &HashMap<&str, Box<Valve>>,
     travel: &HashMap<(&str, &str), i32>,
     curr_node: &str,
-    remaining: BTreeSet<String>,
+    remaining: BTreeSet<&'a str>,
     time: i32,
-    memo: &mut HashMap<(i32, BTreeSet<String>), i32>,
+    memo: &mut HashMap<(i32, BTreeSet<&'a str>), i32>,
 ) -> i32 {
     let mut max_released = 0;
 
@@ -128,19 +128,18 @@ fn search_pair(
     max_released
 }
 
-fn dfs_solo(
-    cave: &HashMap<String, Box<Valve>>,
+fn dfs_solo<'a>(
+    cave: &HashMap<&str, Box<Valve>>,
     travel: &HashMap<(&str, &str), i32>,
     curr_node: &str,
-    remaining: BTreeSet<String>,
+    remaining: BTreeSet<&'a str>,
     time: i32,
     best_so_far: i32,
-    memo: &mut HashMap<(i32, BTreeSet<String>), i32>,
+    memo: &mut HashMap<(i32, BTreeSet<&'a str>), i32>,
 ) -> i32 {
     let mut release_ceiling = cave[curr_node].rate * time;
     for valve in &remaining {
-        release_ceiling +=
-            (cave[valve].rate * (time - travel[&(curr_node, valve.as_str())] - 1)).max(0);
+        release_ceiling += (cave[valve].rate * (time - travel[&(curr_node, *valve)] - 1)).max(0);
     }
 
     if release_ceiling < best_so_far {
@@ -150,13 +149,13 @@ fn dfs_solo(
 
     let mut max_released = 0;
     for next_node in &remaining {
-        let next_time = time - travel[&(curr_node, next_node.as_str())] - 1;
+        let next_time = time - travel[&(curr_node, *next_node)] - 1;
         if next_time > 0 {
             let mut next_remaining = remaining.clone();
             next_remaining.remove(next_node);
 
             let next_released = if memo.contains_key(&(0, next_remaining.clone())) {
-                memo[&(0, next_remaining)]
+                memo[&(0, next_remaining.clone())]
             } else {
                 dfs_solo(
                     cave,
