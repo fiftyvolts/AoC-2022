@@ -1,10 +1,11 @@
 #[macro_use]
 extern crate lazy_static;
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BTreeSet, HashMap, HashSet, VecDeque},
     env::var,
     fs::read_to_string,
-    iter::once,
+    hash::Hash,
+    ops::Index,
 };
 
 use regex::Regex;
@@ -13,10 +14,7 @@ lazy_static! {
     static ref INPUT: String = read_to_string(var("INPUT").unwrap()).unwrap();
     static ref PAT: Regex =
         Regex::new(r"Valve (\S\S) has flow rate=(\d+); tunnels? leads? to valves? (.*)").unwrap();
-
-    static ref ELEPHANT : bool = var("ELEPHANT").is_ok();
-    static ref GENETIC : bool = var("GENETIC").is_ok();
-    static ref SEED : String = var("SEED").unwrap_or_default();
+    static ref ELEPHANT: bool = var("ELEPHANT").is_ok();
 }
 
 #[derive(Debug, Clone)]
@@ -44,110 +42,143 @@ fn main() {
         cave.insert(valve.name.clone(), valve);
     }
 
-    let mut travel: HashMap<(&str, &str), Vec<&str>> = HashMap::new();
+    let mut travel: HashMap<(&str, &str), i32> = HashMap::new();
     let valve_names = cave.keys().collect::<Vec<_>>();
     for i in 0..valve_names.len() {
         for j in 0..valve_names.len() {
             let start = valve_names[i].as_str();
             let end = valve_names[j].as_str();
             if i == j {
-                travel.insert((start, start), vec![]);
+                travel.insert((start, start), 0);
                 continue;
             }
 
-            let mut que = VecDeque::from([(vec![], start)]);
+            let mut que = VecDeque::from([(0, start)]);
             let mut visited = HashSet::<&str>::new();
             while !que.is_empty() {
-                let (path, curr) = que.pop_front().unwrap();
+                let (dist, curr) = que.pop_front().unwrap();
                 if curr == end {
-                    travel.insert((start, curr), path);
+                    travel.insert((start, curr), dist);
                     break;
                 }
                 for adj in &cave.get(curr).unwrap().adj {
                     if !visited.contains(adj) {
                         visited.insert(adj);
-                        que.push_back((
-                            path.iter().chain(once(adj)).cloned().collect::<Vec<_>>(),
-                            adj,
-                        ));
+                        que.push_back((dist + 1, adj));
                     }
                 }
             }
         }
     }
 
-    if *GENETIC {
-        genetic(&cave, &travel);
-    } else if *ELEPHANT {
-        elephant_paths(&cave, &travel);
-    } else {
-        all_possible_paths(&cave, &travel);
-    }
+    all_possible_paths(&cave, &travel);
 }
 
-fn genetic(cave: &HashMap<String, Box<Valve>>, travel: &HashMap<(&str, &str), Vec<&str>>) {
-    let mut valve_names : Vec<String>;
-    
-    if *SEED != "" {
-        valve_names = SEED.split(",").map(|s| String::from(s)).collect::<Vec<_>>();
-    } else {
-        valve_names = cave
+fn all_possible_paths(cave: &HashMap<String, Box<Valve>>, travel: &HashMap<(&str, &str), i32>) {
+    let valve_names = cave
         .keys()
         .filter(|k| k != &"AA" && cave[*k].rate > 0)
         .cloned()
-        .collect::<Vec<_>>();
-        valve_names.sort_by(|a, b| cave[a].rate.cmp(&cave[b].rate));
-    }
+        .collect::<BTreeSet<_>>();
 
-    println!("{:?}", *SEED);
-    let path : Vec<&str> = valve_names.iter().map(|s| s.as_str()).collect();
-    println!("{}", modal_path_pressure(cave, travel, &path[..]));
+    let mut memo = HashMap::new();
+    println!(
+        "Max solo {}",
+        dfs_solo(cave, travel, "AA", valve_names.clone(), 30, 0, &mut memo)
+    );
 
-    // for i in 0..valve_names.len() {
-    //     for j in 0..valve_names.len() {
-
-    //     }
-    // }
-
+    println!(
+        "Max pair {}",
+        search_pair(cave, travel, "AA", valve_names, 26, &mut memo)
+    );
 }
 
-fn modal_path_pressure(
+fn search_pair(
     cave: &HashMap<String, Box<Valve>>,
-    travel: &HashMap<(&str, &str), Vec<&str>>,
-    path: &[&str]
+    travel: &HashMap<(&str, &str), i32>,
+    curr_node: &str,
+    remaining: BTreeSet<String>,
+    time: i32,
+    memo: &mut HashMap<(i32, BTreeSet<String>), i32>,
 ) -> i32 {
-    if *ELEPHANT {
-        path_pressure(cave, travel, &path[..path.len()/2], 26) + 
-        path_pressure(cave, travel, &path[path.len()/2..], 26)
-    } else {
-        path_pressure(cave, travel, path, 30)
-    }
-}
+    let mut max_released = 0;
 
-fn path_pressure(
-    cave: &HashMap<String, Box<Valve>>,
-    travel: &HashMap<(&str, &str), Vec<&str>>,
-    path: &[&str],
-    start_time: i32
-) -> i32 {
-    let mut curr = "AA";
-    let mut time = start_time;
-    let mut release = 0;
-    for i in 0..path.len() {
-        let next = path[i];
-        
-        let dt = 1 + travel[&(curr, next)].len() as i32;
-        if dt > time {
-            return release;
+    let valve_order = Vec::from_iter(remaining);
+
+    for order in PermutationIter::new(valve_order.len()) {
+        let remaining1 = order[..order.len() / 2]
+            .iter()
+            .map(|i| valve_order[*i].clone())
+            .collect::<BTreeSet<_>>();
+
+        let mut next_released = dfs_solo(cave, travel, curr_node, remaining1, time, 0, memo);
+
+        let remaining2 = order[order.len() / 2..]
+            .iter()
+            .map(|i| valve_order[*i].clone())
+            .collect::<BTreeSet<_>>();
+        next_released += dfs_solo(cave, travel, curr_node, remaining2, time, 0, memo);
+
+        if next_released > max_released {
+            println!("New max pair {}", next_released);
+            max_released = next_released;
         }
-        curr = next;
-        time -= dt;
-        release += time * cave[next].rate;
-        println!("{} {}", next, release);
     }
-    release
+
+    max_released
 }
 
+fn dfs_solo(
+    cave: &HashMap<String, Box<Valve>>,
+    travel: &HashMap<(&str, &str), i32>,
+    curr_node: &str,
+    remaining: BTreeSet<String>,
+    time: i32,
+    best_so_far: i32,
+    memo: &mut HashMap<(i32, BTreeSet<String>), i32>,
+) -> i32 {
+    let mut release_ceiling = cave[curr_node].rate * time;
+    for valve in &remaining {
+        release_ceiling +=
+            (cave[valve].rate * (time - travel[&(curr_node, valve.as_str())] - 1)).max(0);
+    }
+
+    if release_ceiling < best_so_far {
+        memo.insert((time, remaining), 0);
+        return 0;
+    }
+
+    let mut max_released = 0;
+    for next_node in &remaining {
+        let next_time = time - travel[&(curr_node, next_node.as_str())] - 1;
+        if next_time > 0 {
+            let mut next_remaining = remaining.clone();
+            next_remaining.remove(next_node);
+
+            let next_released = if memo.contains_key(&(0, next_remaining.clone())) {
+                memo[&(0, next_remaining)]
+            } else {
+                dfs_solo(
+                    cave,
+                    travel,
+                    next_node,
+                    next_remaining,
+                    next_time,
+                    max_released,
+                    memo,
+                )
+            };
+
+            if next_released > max_released {
+                max_released = next_released;
+            }
+        }
+    }
+
+    let ret = max_released + cave[curr_node].rate * time;
+    memo.insert((time, remaining), ret);
+    ret
+}
 
 struct PermutationIter {
     regs: Vec<usize>,
@@ -190,118 +221,42 @@ impl Iterator for PermutationIter {
         Some(ret)
     }
 }
-fn all_possible_paths(
-    cave: &HashMap<String, Box<Valve>>,
-    travel: &HashMap<(&str, &str), Vec<&str>>,
-) {
-    let mut valve_names = cave
-        .keys()
-        .filter(|k| k != &"AA" && cave[*k].rate > 0)
-        .collect::<Vec<_>>();
-    valve_names.sort();
 
-    let mut max_release = 0;
-    let mut max_order = vec![];
-    for order in PermutationIter::new(valve_names.len()) {
-        let mut curr = "AA";
-        let mut time = 30;
-        let mut release = 0;
+// #[derive(Debug, Clone, PartialEq, Eq)]
+// struct NamedBitSet<'a, T>
+// where
+//     T: Index<&'a str, Output = u64>,
+// {
+//     set: u64,
+//     names: &'a T,
+// }
 
-        for i in 0..order.len() {
-            let next = valve_names[order[i]].as_str();
-            let dt = 1 + travel[&(curr, next)].len() as i32;
-            if dt > time {
-                break;
-            }
-            time -= dt;
-            release += time * cave[next].rate;
-            curr = next;
-        }
-        if release > max_release {
-            max_release = release;
-            max_order = order;
-            println!(
-                "new max {} {:?}",
-                max_release,
-                max_order
-                    .iter()
-                    .map(|k| valve_names[*k])
-                    .collect::<Vec<_>>()
-            );
-        }
-    }
+// impl<'a, T> NamedBitSet<'a, T>
+// where
+//     T: Index<&'a str, Output = u64>,
+// {
+//     fn new(names: &'a T) -> Self {
+//         Self { set: 0, names }
+//     }
 
-    println!(
-        "{} {:?}",
-        max_release,
-        max_order
-            .iter()
-            .map(|k| valve_names[*k])
-            .collect::<Vec<_>>()
-    );
-}
+//     fn insert(&mut self, item: &'a str) {
+//         self.set |= self.names[item];
+//     }
 
-fn elephant_paths(cave: &HashMap<String, Box<Valve>>, travel: &HashMap<(&str, &str), Vec<&str>>) {
-    let mut valve_names = cave
-        .keys()
-        .filter(|k| k != &"AA" && cave[*k].rate > 0)
-        .collect::<Vec<_>>();
+//     fn remove(&mut self, item: &'a str) {
+//         self.set &= !(self.names[item]);
+//     }
 
-    valve_names.sort();
+//     fn contains(&self, item: &'a str) -> bool {
+//         self.set & self.names[item] > 0
+//     }
+// }
 
-    let mut max_release = 0;
-    let mut max_order = vec![];
-    for order in PermutationIter::new(valve_names.len()) {
-        let mut curr = "AA";
-        let mut time = 26;
-        let mut release = 0;
-
-        //agent 1
-        for i in 0..order.len() / 2 {
-            let next = valve_names[order[i]].as_str();
-            let dt = 1 + travel[&(curr, next)].len() as i32;
-            if dt > time {
-                break;
-            }
-            time -= dt;
-            release += time * cave[next].rate;
-            curr = next;
-        }
-
-        //agent 2
-        curr = "AA";
-        time = 26;
-        for i in order.len() / 2..order.len() {
-            let next = valve_names[order[i]].as_str();
-            let dt = 1 + travel[&(curr, next)].len() as i32;
-            if dt > time {
-                break;
-            }
-            time -= dt;
-            release += time * cave[next].rate;
-            curr = next;
-        }
-
-        if release > max_release {
-            max_release = release;
-            max_order = order;
-            println!(
-                "new max {} {:?}",
-                max_release,
-                max_order
-                    .iter()
-                    .map(|k| valve_names[*k])
-                    .collect::<Vec<_>>()
-            );
-        }
-    }
-
-    println!(
-        "{} {:?}",
-        max_release,
-        max_order
-            .iter()
-            .map(|k| valve_names[*k])
-            .collect::<Vec<_>>()
-    );
-}
+// impl<'a, T> Hash for NamedBitSet<'a, T>
+// where
+//     T: Index<&'a str, Output = u64>,
+// {
+//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+//         self.set.hash(state);
+//     }
+// }
