@@ -6,6 +6,7 @@ use std::{
     fs::read_to_string,
     hash::Hash,
     ops::Index,
+    time::SystemTime
 };
 
 use regex::Regex;
@@ -15,6 +16,7 @@ lazy_static! {
     static ref PAT: Regex =
         Regex::new(r"Valve (\S\S) has flow rate=(\d+); tunnels? leads? to valves? (.*)").unwrap();
     static ref ELEPHANT: bool = var("ELEPHANT").is_ok();
+    static ref START_TIME : SystemTime = SystemTime::now();
 }
 
 #[derive(Debug, Clone)]
@@ -81,15 +83,14 @@ fn all_possible_paths(cave: &HashMap<&str, Box<Valve>>, travel: &HashMap<(&str, 
         .cloned()
         .collect::<BTreeSet<_>>();
 
-    let mut memo = HashMap::new();
     println!(
         "Max solo {}",
-        dfs_solo(cave, travel, "AA", valve_names.clone(), 30, 0, &mut memo)
+        dfs_solo(cave, travel, "AA", valve_names.clone(), 30, 0)
     );
 
     println!(
         "Max pair {}",
-        search_pair(cave, travel, "AA", valve_names, 26, &mut memo)
+        search_pair(cave, travel, "AA", valve_names, 26)
     );
 }
 
@@ -98,8 +99,7 @@ fn search_pair<'a>(
     travel: &HashMap<(&str, &str), i32>,
     curr_node: &str,
     remaining: BTreeSet<&'a str>,
-    time: i32,
-    memo: &mut HashMap<(i32, BTreeSet<&'a str>), i32>,
+    time: i32
 ) -> i32 {
     let mut max_released = 0;
 
@@ -111,16 +111,16 @@ fn search_pair<'a>(
             .map(|i| valve_order[*i].clone())
             .collect::<BTreeSet<_>>();
 
-        let mut next_released = dfs_solo(cave, travel, curr_node, remaining1, time, 0, memo);
+        let mut next_released = dfs_solo(cave, travel, curr_node, remaining1, time, 0);
 
         let remaining2 = order[order.len() / 2..]
             .iter()
             .map(|i| valve_order[*i].clone())
             .collect::<BTreeSet<_>>();
-        next_released += dfs_solo(cave, travel, curr_node, remaining2, time, 0, memo);
+        next_released += dfs_solo(cave, travel, curr_node, remaining2, time, 0);
 
         if next_released > max_released {
-            println!("New max pair {}", next_released);
+            println!("New max pair {} (.{})", next_released, START_TIME.elapsed().unwrap().as_millis());
             max_released = next_released;
         }
     }
@@ -134,8 +134,7 @@ fn dfs_solo<'a>(
     curr_node: &str,
     remaining: BTreeSet<&'a str>,
     time: i32,
-    best_so_far: i32,
-    memo: &mut HashMap<(i32, BTreeSet<&'a str>), i32>,
+    best_so_far: i32
 ) -> i32 {
     let mut release_ceiling = cave[curr_node].rate * time;
     for valve in &remaining {
@@ -143,7 +142,6 @@ fn dfs_solo<'a>(
     }
 
     if release_ceiling < best_so_far {
-        memo.insert((time, remaining), 0);
         return 0;
     }
 
@@ -154,19 +152,14 @@ fn dfs_solo<'a>(
             let mut next_remaining = remaining.clone();
             next_remaining.remove(next_node);
 
-            let next_released = if memo.contains_key(&(0, next_remaining.clone())) {
-                memo[&(0, next_remaining.clone())]
-            } else {
-                dfs_solo(
+            let next_released = dfs_solo(
                     cave,
                     travel,
                     next_node,
                     next_remaining,
                     next_time,
-                    max_released,
-                    memo,
-                )
-            };
+                    max_released
+                );
 
             if next_released > max_released {
                 max_released = next_released;
@@ -175,7 +168,6 @@ fn dfs_solo<'a>(
     }
 
     let ret = max_released + cave[curr_node].rate * time;
-    memo.insert((time, remaining), ret);
     ret
 }
 
